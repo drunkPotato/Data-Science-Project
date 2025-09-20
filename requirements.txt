@@ -21,6 +21,9 @@ streamlit>=1.10.0
 # Image Processing
 albumentations>=1.1.0
 
+# Emotion Detection
+deepface>=0.0.79
+
 # Model Management
 joblib>=1.1.0
 

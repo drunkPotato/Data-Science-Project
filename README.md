@@ -50,20 +50,47 @@ This project implements an end-to-end pipeline for emotion detection from facial
    ```bash
    pip install -r requirements.txt
    ```
+   
+   **Note**: If you encounter issues during installation (especially with TensorFlow/PyTorch), consider:
+   - Using a virtual environment
+   - Installing packages individually if conflicts arise
+   - Checking system compatibility for GPU support
+
+## Dataset Information
+
+The project includes two facial emotion datasets:
+
+### Dataset 1: Faces_Dataset
+- **Training images**: 28,709 images
+- **Test images**: 7,178 images
+- **Emotions**: angry, disgusted, fearful, happy, neutral, sad, surprised
+- **Format**: PNG images organized by emotion folders
+
+### Dataset 2: Faces_Dataset_2_smaller_better_quality
+- **Images**: 172 high-quality images
+- **Metadata**: emotions.csv with demographic information (gender, age, country)
+- **Format**: Images with CSV metadata
 
 ## Usage
 
-### Data Preparation
-Place your facial image datasets in the `data/raw/` directory.
-
 ### Running Emotion Detection
 ```bash
-python src/emotion_detection/predict.py --input data/raw/your_images/
+# Analyze single image
+python examples/detect_emotions.py
+
+# Or use the detector directly
+from src.emotion_detection import EmotionDetector
+detector = EmotionDetector()
+result = detector.detect_emotion("data/raw/Faces_Dataset/test/happy/im0.png")
+print(result['dominant_emotion'])
 ```
 
-### Interactive Visualization
+### Batch Processing
 ```bash
-python src/visualization/app.py
+# Process entire folders
+detector = EmotionDetector()
+results = detector.detect_emotions_batch("data/raw/Faces_Dataset/test/happy")
+detector.save_results(results, "data/processed/happy_emotions.csv")
 ```
 
 ## Development Workflow
@@ -74,21 +101,3 @@ python src/visualization/app.py
 - `feature/<feature-name>`: Individual feature development
 - `data/<data-task>`: Data processing tasks
 - `viz/<visualization-feature>`: Visualization features
-
-### Creating a Feature Branch
-```bash
-git checkout -b feature/your-feature-name
-# Make your changes
-git add .
-git commit -m "Add: your feature description"
-git push origin feature/your-feature-name
-```
-
-## Contributing
-1. Create a feature branch from `develop`
-2. Make your changes
-3. Add tests for new functionality
-4. Submit a pull request to `develop`
-
-## License
-[Add your license here]
