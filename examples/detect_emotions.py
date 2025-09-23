@@ -16,7 +16,7 @@ def main():
     
     # Example 1: Detect emotion from a single image
     print("=== Single Image Detection ===")
-    image_path = "data/raw/sample_image.jpg"
+    image_path = "data/raw/Faces_Dataset/test/happy/im0.png"
     
     if os.path.exists(image_path):
         result = detector.detect_emotion(image_path)
@@ -33,7 +33,7 @@ def main():
     
     # Example 2: Batch processing
     print("\n=== Batch Processing ===")
-    input_folder = "data/raw"
+    input_folder = "data/raw/Faces_Dataset/test/happy"
     output_file = "data/processed/emotion_results.csv"
     
     if os.path.exists(input_folder) and os.listdir(input_folder):

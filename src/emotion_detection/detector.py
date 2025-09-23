@@ -35,7 +35,6 @@ class EmotionDetector:
             result = DeepFace.analyze(
                 img_path=image_path,
                 actions=['emotion'],
-                model_name=self.model_name,
                 enforce_detection=False
             )
             
