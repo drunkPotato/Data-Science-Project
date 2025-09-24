@@ -7,30 +7,15 @@ import numpy as np
 
 
 class EmotionDetector:
-    """
-    A class for detecting emotions from facial images using DeepFace.
-    """
     
+    #Initialize detector
     def __init__(self, model_name: str = 'VGG-Face'):
-        """
-        Initialize the emotion detector.
-        
-        Args:
-            model_name: Name of the model to use ('VGG-Face', 'Facenet', 'OpenFace', 'DeepFace')
-        """
+        # Models: 'VGG-Face', 'Facenet', 'OpenFace', 'DeepFace'
         self.model_name = model_name
         self.supported_formats = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
     
     def detect_emotion(self, image_path: str) -> Dict:
-        """
-        Detect emotion from a single image.
-        
-        Args:
-            image_path: Path to the image file
-            
-        Returns:
-            Dictionary containing emotion predictions and confidence scores
-        """
+        #Returns a dictionary with emotion predictions and confidence scores
         try:
             result = DeepFace.analyze(
                 img_path=image_path,
@@ -38,7 +23,7 @@ class EmotionDetector:
                 enforce_detection=False
             )
             
-            # Handle both single face and multiple faces
+            # Take the first face if multiple are detected
             if isinstance(result, list):
                 result = result[0]
                 
