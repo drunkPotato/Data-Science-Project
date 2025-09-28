@@ -92,12 +92,3 @@ detector = EmotionDetector()
 results = detector.detect_emotions_batch("data/raw/Faces_Dataset/test/happy")
 detector.save_results(results, "data/processed/happy_emotions.csv")
 ```
-
-## Development Workflow
-
-### Branching Strategy
-- `main`: Production-ready code
-- `develop`: Integration branch for features
-- `feature/<feature-name>`: Individual feature development
-- `data/<data-task>`: Data processing tasks
-- `viz/<visualization-feature>`: Visualization features
