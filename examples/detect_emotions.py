@@ -31,28 +31,46 @@ def main():
         print(f"Sample image not found at {image_path}")
         print("Please add a sample image to data/raw/ folder")
     
-    # Example 2: Batch processing
-    print("\n=== Batch Processing ===")
-    input_folder = "data/raw/Faces_Dataset/test/happy"
+    # Example 2: Batch processing all emotions
+    print("\n=== Batch Processing All Emotions ===")
+    base_folder = "data/raw/Faces_Dataset/test"
     output_file = "data/processed/emotion_results.csv"
     
-    if os.path.exists(input_folder) and os.listdir(input_folder):
-        try:
-            results = detector.detect_emotions_batch(input_folder)
-            detector.save_results(results, output_file)
+    emotion_folders = ['angry', 'disgusted', 'fearful', 'happy', 'neutral', 'sad', 'surprised']
+    all_results = []
+    
+    if os.path.exists(base_folder):
+        for emotion in emotion_folders:
+            emotion_folder = os.path.join(base_folder, emotion)
+            if os.path.exists(emotion_folder) and os.listdir(emotion_folder):
+                print(f"\nProcessing {emotion} images...")
+                try:
+                    results = detector.detect_emotions_batch(emotion_folder)
+                    all_results.extend(results)
+                    
+                    successful = len([r for r in results if r['status'] == 'success'])
+                    failed = len([r for r in results if r['status'] == 'error'])
+                    print(f"  {emotion}: {successful} successful, {failed} failed")
+                    
+                except Exception as e:
+                    print(f"Error processing {emotion}: {e}")
+            else:
+                print(f"Skipping {emotion} - folder not found or empty")
+        
+        if all_results:
+            detector.save_results(all_results, output_file)
             
-            # Print summary
-            successful = len([r for r in results if r['status'] == 'success'])
-            failed = len([r for r in results if r['status'] == 'error'])
-            print(f"\nSummary:")
-            print(f"  Successfully processed: {successful} images")
-            print(f"  Failed: {failed} images")
-            
-        except Exception as e:
-            print(f"Error during batch processing: {e}")
+            total_successful = len([r for r in all_results if r['status'] == 'success'])
+            total_failed = len([r for r in all_results if r['status'] == 'error'])
+            print(f"\nOverall Summary:")
+            print(f"  Total images processed: {len(all_results)}")
+            print(f"  Successfully processed: {total_successful}")
+            print(f"  Failed: {total_failed}")
+        else:
+            print("No images found to process")
     else:
-        print("No images found in data/raw folder")
-        print("Please add some facial images to test the emotion detection")
+        print("Dataset folder not found")
+        print("Please ensure data/raw/Faces_Dataset/test/ exists")
 
 
 if __name__ == "__main__":
