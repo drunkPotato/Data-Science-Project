@@ -298,9 +298,9 @@ def main():
                                     
                                     # Show prediction result with color coding
                                     if dominant_emotion == true_emotion_mapped:
-                                        st.success(f"✅ **{model_name}**: {dominant_emotion.title()} ({confidence:.1f}%)")
+                                        st.success(f"**{model_name}**: {dominant_emotion.title()} ({confidence:.1f}%)")
                                     else:
-                                        st.error(f"❌ **{model_name}**: {dominant_emotion.title()} ({confidence:.1f}%)")
+                                        st.error(f"**{model_name}**: {dominant_emotion.title()} ({confidence:.1f}%)")
                                 else:
                                     st.error(f"**{model_name}**: {model_result['error']}")
                             
@@ -333,9 +333,9 @@ def main():
                                 if len(models) >= 2:
                                     predictions = [result['models'][model]['dominant_emotion'] for model in models if result['models'][model]['status'] == 'success']
                                     if len(set(predictions)) == 1:
-                                        st.info(f"🤝 **Models Agree**: Both predict {predictions[0].title()}")
+                                        st.info(f"**Models Agree**: Both predict {predictions[0].title()}")
                                     else:
-                                        st.warning(f"🤔 **Models Disagree**: {' vs '.join([pred.title() for pred in predictions])}")
+                                        st.warning(f"**Models Disagree**: {' vs '.join([pred.title() for pred in predictions])}")
                             
                         else:
                             st.error(f"Analysis failed: {result.get('error', 'Unknown error')}")
@@ -374,12 +374,7 @@ def main():
         if results_path and os.path.exists(results_path):
             df = pd.read_csv(results_path)
             
-            if not df.empty:
-                if is_multi_model:
-                    st.info("📊 **Multi-Model Analysis Results** - Showing comparison between DeepFace-Emotion and FER models")
-                else:
-                    st.info("📊 **Single Model Analysis Results** - Showing DeepFace-Emotion model only")
-                
+            if not df.empty:                
                 st.subheader("Analysis Summary")
                 
                 # Extract emotion from image path (assuming path contains emotion folder name)
@@ -410,7 +405,7 @@ def main():
                 
                 if is_multi_model:
                     # Multi-model analysis
-                    st.subheader("📈 Multi-Model Performance Comparison")
+                    st.subheader("Multi-Model Performance Comparison")
                     
                     # Get unique models
                     models = df['model'].unique()
@@ -438,12 +433,12 @@ def main():
                     cols = st.columns(len(models))
                     for i, model in enumerate(models):
                         with cols[i]:
-                            st.metric(f"🎯 {model} Accuracy", f"{model_metrics[model]['accuracy']:.1f}%")
-                            st.write(f"✅ Success: {model_metrics[model]['successful']}")
-                            st.write(f"❌ Failed: {model_metrics[model]['failed']}")
+                            st.metric(f"{model} Accuracy", f"{model_metrics[model]['accuracy']:.1f}%")
+                            st.write(f"Success: {model_metrics[model]['successful']}")
+                            st.write(f"Failed: {model_metrics[model]['failed']}")
                     
                     # Model comparison chart
-                    st.subheader("📊 Accuracy Comparison")
+                    st.subheader("Accuracy Comparison")
                     accuracy_data = [(model, metrics['accuracy']) for model, metrics in model_metrics.items()]
                     model_names, accuracies = zip(*accuracy_data)
                     
@@ -468,7 +463,7 @@ def main():
                     st.plotly_chart(fig_comparison, use_container_width=True)
                     
                     # Show agreement analysis
-                    st.subheader("🤝 Model Agreement Analysis")
+                    st.subheader("Model Agreement Analysis")
                     
                     # Find images processed by both models
                     image_paths = df['image_path'].unique()
@@ -503,13 +498,13 @@ def main():
                         
                         agreement_cols = st.columns(4)
                         with agreement_cols[0]:
-                            st.metric("🤝 Total Agreements", f"{agreements}/{total_comparisons}")
+                            st.metric("Total Agreements", f"{agreements}/{total_comparisons}")
                         with agreement_cols[1]:
-                            st.metric("✅ Both Correct", both_correct)
+                            st.metric("Both Correct", both_correct)
                         with agreement_cols[2]:
-                            st.metric("❌ Both Wrong", both_wrong)
+                            st.metric("Both Wrong", both_wrong)
                         with agreement_cols[3]:
-                            st.metric("🤔 Disagreements", disagreements)
+                            st.metric("Disagreements", disagreements)
                         
                         agreement_rate = (agreements / total_comparisons) * 100 if total_comparisons > 0 else 0
                         st.write(f"**Agreement Rate: {agreement_rate:.1f}%**")
@@ -537,7 +532,7 @@ def main():
                         st.metric("Overall Accuracy", f"{overall_accuracy:.1f}%")
                 
                 # Per-emotion accuracy analysis
-                st.subheader("📊 Accuracy by Emotion Category")
+                st.subheader("Accuracy by Emotion Category")
                 
                 if is_multi_model:
                     # Multi-model per-emotion analysis
@@ -577,7 +572,7 @@ def main():
                             st.dataframe(comparison_df, use_container_width=True)
                             
                             # Create side-by-side accuracy chart by emotion
-                            st.subheader("📈 Per-Emotion Accuracy Comparison")
+                            st.subheader("Per-Emotion Accuracy Comparison")
                             
                             emotions_for_chart = []
                             model_accuracies = {model: [] for model in models}
@@ -625,7 +620,7 @@ def main():
                             st.plotly_chart(fig_emotion_comparison, use_container_width=True)
                             
                             # Show which model performs better per emotion
-                            st.subheader("🏆 Best Performing Model per Emotion")
+                            st.subheader("Best Performing Model per Emotion")
                             best_performers = []
                             
                             for row in emotion_comparison:
@@ -716,18 +711,6 @@ def main():
                 )
                 st.plotly_chart(fig_pie, use_container_width=True)
                 
-                # Show sample results
-                st.subheader("Sample Results")
-                st.dataframe(df.head(20), use_container_width=True)
-                
-                # Download results
-                csv = df.to_csv(index=False)
-                st.download_button(
-                    label="Download Full Results",
-                    data=csv,
-                    file_name="emotion_analysis_results.csv",
-                    mime="text/csv"
-                )
             else:
                 st.info("No results found. Run the batch analysis first.")
         else:

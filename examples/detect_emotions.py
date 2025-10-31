@@ -45,6 +45,7 @@ def main():
     print("\n=== Batch Processing with Model Comparison ===")
     input_folder = "data/raw/Faces_Dataset/test/happy"
     output_file = "data/processed/emotion_results_comparison.csv"
+    base_folder = "data/raw/Faces_Dataset/test"
     
     emotion_folders = ['angry', 'disgusted', 'fearful', 'happy', 'neutral', 'sad', 'surprised']
     all_results = []

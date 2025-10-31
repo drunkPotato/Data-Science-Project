@@ -4,6 +4,7 @@ import pandas as pd
 from deepface import DeepFace
 import cv2
 import numpy as np
+from fer.fer import FER
 
 
 class EmotionDetector:
@@ -215,15 +216,7 @@ class EmotionDetector:
         Returns:
             Result dictionary in DeepFace-compatible format
         """
-        try:
-            # Import FER library (try different versions)
-            try:
-                from fer import FER
-            except ImportError:
-                from fer.fer import FER
-            
-            import cv2
-            
+        try:            
             # Initialize FER detector (try different initialization approaches)
             try:
                 emotion_detector = FER(mtcnn=True)
