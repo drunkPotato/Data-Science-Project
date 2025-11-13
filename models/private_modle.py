@@ -31,7 +31,6 @@ from torch.utils.data import DataLoader
 from torch.utils.data.sampler import WeightedRandomSampler
 from torchvision import datasets, transforms, models
 
-# NEW: live progress output
 from tqdm import tqdm
 
 
@@ -217,12 +216,12 @@ def load_datasets(data_root, img_size, erasing_p):
     test_ds  = datasets.ImageFolder(test_dir,  transform=eval_tf) if os.path.isdir(test_dir) else None
 
     # Sanity check / helpful message
-    expected = ['angry','disgust','fear','happy','sad','surprise','neutral']
+    expected = ['angry','disgusted','fearful','happy','sad','surprised','neutral']
     ds_classes_lower = [c.lower() for c in train_ds.classes]
     if sorted(ds_classes_lower) != sorted(expected):
         print("Warning: class names differ from the expected seven. Using whatever is in the folders.")
-        if "surprised" in ds_classes_lower and "surprise" not in ds_classes_lower:
-            print("Hint: You have a folder named 'surprised'. Rename it to 'surprise' in train/val[/test] to align labels.")
+        if "surprise" in ds_classes_lower and "surprised" not in ds_classes_lower:
+            print("Hint: You have a folder named 'surprise'. Rename it to 'surprised' in train/val[/test] to align labels.")
 
     return train_ds, val_ds, test_ds
 
@@ -424,7 +423,6 @@ def train(args):
                 "args": vars(args),
                 "val_macro_f1": float(val_f1),
                 "val_acc": float(val_acc),
-                "timestamp": datetime.utcnow().isoformat() + "Z"
             }
             torch.save(ckpt, os.path.join(args.out_dir, "best.pt"))
             if cm is not None:

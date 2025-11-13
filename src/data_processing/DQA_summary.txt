@@ -1,0 +1,77 @@
+Expected emotions (7): angry, disgusted, fearful, happy, neutral, sad, surprised
+
+TRAIN SPLIT:
+--------------------
+  STATUS: PASS
+  Emotions found: 7/7
+  Present: angry, disgusted, fearful, happy, neutral, sad, surprised
+  Picture counts:
+         angry:   2805 pictures
+     disgusted:    286 pictures
+       fearful:   2861 pictures
+         happy:   5150 pictures
+       neutral:   3537 pictures
+           sad:   3436 pictures
+     surprised:   2009 pictures
+         TOTAL:  20084 pictures
+TEST SPLIT:
+--------------------
+  STATUS: PASS
+  Emotions found: 7/7
+  Present: angry, disgusted, fearful, happy, neutral, sad, surprised
+  Picture counts:
+         angry:    900 pictures
+     disgusted:     83 pictures
+       fearful:    947 pictures
+         happy:   1721 pictures
+       neutral:   1194 pictures
+           sad:   1207 pictures
+     surprised:    633 pictures
+         TOTAL:   6685 pictures
+VAL SPLIT:
+--------------------
+  STATUS: PASS
+  Emotions found: 7/7
+  Present: angry, disgusted, fearful, happy, neutral, sad, surprised
+  Picture counts:
+         angry:   1025 pictures
+     disgusted:     90 pictures
+       fearful:   1019 pictures
+         happy:   1927 pictures
+       neutral:   1317 pictures
+           sad:   1274 pictures
+     surprised:    613 pictures
+         TOTAL:   7265 pictures
+OVERALL DUPLICATE CHECK:
+-------------------------
+Total files across all splits: 34034
+Unique files across all splits: 34034
+Duplicates across all splits: 0
+[PASS] No duplicates found across splits
+
+FILE FORMAT ANALYSIS:
+--------------------
+Total files processed: 34034
+File formats found: ['.png']
+  .png: 34034 files (100.0%)
+[PASS] All files use consistent format
+
+CLASS BALANCE ANALYSIS:
+-------------------------
+       angry:   4730 images ( 13.9%)
+   disgusted:    459 images (  1.3%)
+     fearful:   4827 images ( 14.2%)
+       happy:   8798 images ( 25.9%)
+     neutral:   6048 images ( 17.8%)
+         sad:   5917 images ( 17.4%)
+   surprised:   3255 images (  9.6%)
+  [WARNING] Class imbalances detected:
+    - 'disgusted' severely underrepresented (<5%)
+
+IMAGE READABILITY CHECK:
+-------------------------
+[PASS] All image files are readable and not corrupted
+
+OVERALL SUMMARY:
+--------------------
+[PASS] All splits have the required 7 emotion folders

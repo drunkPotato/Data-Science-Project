@@ -12,34 +12,51 @@ from src.emotion_detection import EmotionDetector
 
 def main():
     # Initialize the emotion detector with different emotion detection libraries
-    models_to_compare = ['DeepFace-Emotion', 'FER']
+    models_to_compare = ['DeepFace-Emotion', 'FER', 'Custom-ResNet18']
     detector = EmotionDetector(models=models_to_compare)
     
     print(f"=== Multi-Model Emotion Detection Comparison ===")
     print(f"Models: {', '.join(models_to_compare)}")
     
-    # Example 1: Detect emotion from a single image
-    print("\n=== Single Image Detection ===")
-    image_path = "data/raw/Faces_Dataset/test/happy/im0.png"
+    # Example 1: Detect emotion from multiple images
+    print("\n=== Multiple Image Detection (First 10) ===")
+    test_folder = "data/raw/Faces_Dataset/test/happy"
     
-    if os.path.exists(image_path):
-        result = detector.detect_emotion(image_path)
-        if result['status'] == 'success':
-            print(f"\nResults for {os.path.basename(image_path)}:")
-            for model_name, model_result in result['models'].items():
-                if model_result['status'] == 'success':
-                    print(f"\n{model_name} Model:")
-                    print(f"  Dominant emotion: {model_result['dominant_emotion']}")
-                    print("  All emotion scores:")
-                    for emotion, score in model_result['emotion_scores'].items():
-                        print(f"    {emotion}: {score:.2f}%")
+    if os.path.exists(test_folder):
+        # Get first 10 images from happy folder
+        image_files = []
+        for file in sorted(os.listdir(test_folder)):
+            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                image_files.append(os.path.join(test_folder, file))
+            if len(image_files) >= 10:  # Stop at 10 images
+                break
+        
+        if image_files:
+            print(f"Processing {len(image_files)} images from happy folder...")
+            
+            for i, image_path in enumerate(image_files, 1):
+                print(f"\n{'='*50}")
+                print(f"IMAGE {i}: {os.path.basename(image_path)}")
+                print('='*50)
+                
+                result = detector.detect_emotion(image_path)
+                if result['status'] == 'success':
+                    for model_name, model_result in result['models'].items():
+                        if model_result['status'] == 'success':
+                            print(f"\n{model_name} Model:")
+                            print(f"  Dominant emotion: {model_result['dominant_emotion']}")
+                            print("  All emotion scores:")
+                            for emotion, score in model_result['emotion_scores'].items():
+                                print(f"    {emotion}: {score:.2f}%")
+                        else:
+                            print(f"\n{model_name} Model: Error - {model_result['error']}")
                 else:
-                    print(f"\n{model_name} Model: Error - {model_result['error']}")
+                    print(f"Error processing image: {result.get('error', 'Unknown error')}")
         else:
-            print(f"Error processing image: {result.get('error', 'Unknown error')}")
+            print("No image files found in happy folder")
     else:
-        print(f"Sample image not found at {image_path}")
-        print("Please add a sample image to data/raw/ folder")
+        print(f"Test folder not found at {test_folder}")
+        print("Please check the dataset path")
     
     # Example 2: Batch processing with model comparison
     print("\n=== Batch Processing with Model Comparison ===")

@@ -1,27 +1,29 @@
 import os
 from typing import Dict, List, Union
 import pandas as pd
-from deepface import DeepFace
-import cv2
-import numpy as np
-from fer.fer import FER
 
 
 class EmotionDetector:
     
-    def __init__(self, models: Union[str, List[str]] = 'VGG-Face'):
+    def __init__(self, models: Union[str, List[str]] = 'DeepFace-Emotion'):
         """
         Initialize the emotion detector.
         
         Args:
             models: Name(s) of the model(s) to use. Can be a single model or list of models.
-                   Available models: 'DeepFace-Emotion', 'FER'
+                   Available models: 'DeepFace-Emotion', 'FER', 'Custom-ResNet18'
         """
         if isinstance(models, str):
             self.models = [models]
         else:
             self.models = models
         self.supported_formats = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
+        
+        # Initialize custom model components when needed
+        self.custom_model = None
+        self.custom_transform = None
+        self.custom_classes = None
+        self.device = None
     
     def detect_emotion(self, image_path: str) -> Dict:
         """
@@ -42,32 +44,17 @@ class EmotionDetector:
         for model in self.models:
             try:
                 if model == 'DeepFace-Emotion':
-                    # Use DeepFace emotion model
-                    result = DeepFace.analyze(
-                        img_path=image_path,
-                        actions=['emotion'],
-                        enforce_detection=False,
-                        detector_backend='opencv'
-                    )
+                    result = self._analyze_with_deepface(image_path)
                 elif model == 'FER':
-                    # Use FER library for emotion detection
                     result = self._analyze_with_fer(image_path)
+                elif model == 'Custom-ResNet18':
+                    result = self._analyze_with_custom_model(image_path)
                 else:
-                    # Fallback to DeepFace
-                    result = DeepFace.analyze(
-                        img_path=image_path,
-                        actions=['emotion'],
-                        enforce_detection=False,
-                        detector_backend='opencv'
-                    )
+                    raise ValueError(f"Unknown model: {model}")
                 
-                # Handle both single face and multiple faces
-                if isinstance(result, list):
-                    result = result[0]
-                    
                 results['models'][model] = {
                     'dominant_emotion': result['dominant_emotion'],
-                    'emotion_scores': result['emotion'],
+                    'emotion_scores': result['emotion_scores'],
                     'status': 'success'
                 }
                 
@@ -82,6 +69,209 @@ class EmotionDetector:
             results['status'] = 'error'
             
         return results
+    
+    def _analyze_with_deepface(self, image_path: str) -> Dict:
+        """Analyze emotion using DeepFace."""
+        # Import only when needed to avoid conflicts
+        from deepface import DeepFace
+        
+        result = DeepFace.analyze(
+            img_path=image_path,
+            actions=['emotion'],
+            enforce_detection=False,
+            detector_backend='opencv'
+        )
+        
+        # Handle both single face and multiple faces
+        if isinstance(result, list):
+            result = result[0]
+        
+        # Map DeepFace emotion labels to match dataset format
+        emotion_mapping = {
+            'fear': 'fearful',
+            'surprise': 'surprised', 
+            'disgust': 'disgusted',
+            'happy': 'happy',
+            'sad': 'sad',
+            'angry': 'angry',
+            'neutral': 'neutral'
+        }
+        
+        # Apply mapping to emotion scores
+        mapped_scores = {}
+        for emotion, score in result['emotion'].items():
+            mapped_emotion = emotion_mapping.get(emotion, emotion)
+            mapped_scores[mapped_emotion] = score
+        
+        # Apply mapping to dominant emotion
+        mapped_dominant = emotion_mapping.get(result['dominant_emotion'], result['dominant_emotion'])
+            
+        return {
+            'dominant_emotion': mapped_dominant,
+            'emotion_scores': mapped_scores
+        }
+    
+    def _analyze_with_fer(self, image_path: str) -> Dict:
+        """Analyze emotion using FER library."""
+        # Import only when needed to avoid conflicts
+        import cv2
+        from fer.fer import FER
+        
+        # Initialize FER detector - try different face detection backends
+        emotion_detector = None
+        for use_mtcnn in [False, True]:  # Try without mtcnn first, then with mtcnn
+            try:
+                emotion_detector = FER(mtcnn=use_mtcnn)
+                break
+            except Exception:
+                continue
+        
+        if emotion_detector is None:
+            raise Exception("Failed to initialize FER detector with any configuration")
+        
+        # Read image
+        img = cv2.imread(image_path)
+        if img is None:
+            raise ValueError(f"Could not read image: {image_path}")
+        
+        # Resize image if it's too small for face detection (FER needs larger images)
+        if img.shape[0] < 100 or img.shape[1] < 100:
+            # Resize to at least 224x224 using bicubic interpolation for better quality
+            new_size = max(224, img.shape[0] * 5, img.shape[1] * 5)
+            img = cv2.resize(img, (new_size, new_size), interpolation=cv2.INTER_CUBIC)
+        
+        # Detect emotions
+        try:
+            emotions = emotion_detector.detect_emotions(img)
+        except Exception:
+            try:
+                emotions = emotion_detector.predict(img)
+            except Exception:
+                emotions = emotion_detector(img)
+        
+        if not emotions:
+            # Try converting image format (sometimes helps with face detection)
+            try:
+                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                emotions = emotion_detector.detect_emotions(img_rgb)
+            except Exception:
+                pass
+        
+        if not emotions:
+            raise ValueError("No face detected in image - tried multiple detection methods")
+        
+        # Get the first face's emotions
+        face_emotions = emotions[0]['emotions']
+        
+        # Find dominant emotion
+        dominant_emotion = max(face_emotions, key=face_emotions.get)
+        
+        # Convert to percentages to match DeepFace format
+        emotion_scores = {k: v * 100 for k, v in face_emotions.items()}
+        
+        # Map FER emotion labels to match dataset format
+        emotion_mapping = {
+            'fear': 'fearful',
+            'surprise': 'surprised', 
+            'disgust': 'disgusted',
+            'happy': 'happy',
+            'sad': 'sad',
+            'angry': 'angry',
+            'neutral': 'neutral'
+        }
+        
+        # Apply mapping to emotion scores
+        mapped_scores = {}
+        for emotion, score in emotion_scores.items():
+            mapped_emotion = emotion_mapping.get(emotion, emotion)
+            mapped_scores[mapped_emotion] = score
+        
+        # Apply mapping to dominant emotion
+        mapped_dominant = emotion_mapping.get(dominant_emotion, dominant_emotion)
+        
+        return {
+            'dominant_emotion': mapped_dominant,
+            'emotion_scores': mapped_scores
+        }
+    
+    def _analyze_with_custom_model(self, image_path: str) -> Dict:
+        """Analyze emotion using custom trained ResNet18 model."""
+        # Load model if not already loaded
+        if self.custom_model is None:
+            self._load_custom_model()
+        
+        # Import only when needed to avoid conflicts
+        import torch
+        import torch.nn.functional as F
+        from PIL import Image
+        
+        # Read and preprocess image
+        img = Image.open(image_path).convert('RGB')
+        img_tensor = self.custom_transform(img).unsqueeze(0).to(self.device)
+        
+        # Get prediction
+        with torch.no_grad():
+            logits = self.custom_model(img_tensor)
+            probs = F.softmax(logits, dim=1)
+            
+        # Convert to percentages and create emotion scores dict
+        probs = probs.cpu().numpy()[0]
+        emotion_scores = {
+            emotion: float(prob * 100) 
+            for emotion, prob in zip(self.custom_classes, probs)
+        }
+        
+        # Find dominant emotion
+        dominant_emotion = max(emotion_scores, key=emotion_scores.get)
+        
+        return {
+            'dominant_emotion': dominant_emotion,
+            'emotion_scores': emotion_scores
+        }
+    
+    def _load_custom_model(self):
+        """Load the custom trained ResNet18 model."""
+        # Import only when needed to avoid conflicts
+        import torch
+        from torchvision import transforms, models
+        
+        # Path to the trained model
+        model_path = os.path.join(os.path.dirname(__file__), '../../runs/exp2_clean/best.pt')
+        
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Custom model not found at: {model_path}")
+        
+        # Load checkpoint
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        checkpoint = torch.load(model_path, map_location=device)
+        
+        # Get model architecture and classes
+        self.custom_classes = checkpoint['classes']
+        num_classes = len(self.custom_classes)
+        
+        # Build model architecture
+        model = models.resnet18(weights=None)
+        in_feats = model.fc.in_features
+        model.fc = torch.nn.Sequential(
+            torch.nn.Dropout(0.3), 
+            torch.nn.Linear(in_feats, num_classes)
+        )
+        
+        # Load trained weights
+        model.load_state_dict(checkpoint['model_state'])
+        model.eval()
+        model.to(device)
+        
+        self.custom_model = model
+        self.device = device
+        
+        # Define transform (same as training eval transform)
+        self.custom_transform = transforms.Compose([
+            transforms.Resize(int(224 * 1.15)),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
     
     def detect_emotions_batch(self, image_folder: str) -> List[Dict]:
         """
@@ -205,58 +395,3 @@ class EmotionDetector:
             }
         
         return comparison
-    
-    def _analyze_with_fer(self, image_path: str) -> Dict:
-        """
-        Analyze emotion using FER library as alternative to DeepFace.
-        
-        Args:
-            image_path: Path to the image file
-            
-        Returns:
-            Result dictionary in DeepFace-compatible format
-        """
-        try:            
-            # Initialize FER detector (try different initialization approaches)
-            try:
-                emotion_detector = FER(mtcnn=True)
-            except Exception:
-                # Fallback initialization without mtcnn
-                emotion_detector = FER()
-            
-            # Read image
-            img = cv2.imread(image_path)
-            if img is None:
-                raise ValueError(f"Could not read image: {image_path}")
-            
-            # Detect emotions - try the newer API first
-            try:
-                emotions = emotion_detector.detect_emotions(img)
-            except Exception as e:
-                # Try alternative method names
-                try:
-                    emotions = emotion_detector.predict(img)
-                except Exception:
-                    emotions = emotion_detector(img)
-            
-            if not emotions:
-                raise ValueError("No face detected in image")
-            
-            # Get the first face's emotions (FER returns list with emotion dict)
-            face_emotions = emotions[0]['emotions']
-            
-            # Find dominant emotion
-            dominant_emotion = max(face_emotions, key=face_emotions.get)
-            
-            # Convert to percentages to match DeepFace format
-            emotion_scores = {k: v * 100 for k, v in face_emotions.items()}
-            
-            return {
-                'dominant_emotion': dominant_emotion,
-                'emotion': emotion_scores
-            }
-            
-        except ImportError:
-            raise ImportError("FER library not installed. Install with: pip install fer")
-        except Exception as e:
-            raise Exception(f"FER analysis failed: {str(e)}")

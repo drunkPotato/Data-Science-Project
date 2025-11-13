@@ -20,7 +20,7 @@ st.set_page_config(
 
 # Initialize session state
 if 'detector' not in st.session_state:
-    st.session_state.detector = EmotionDetector(models=['DeepFace-Emotion', 'FER'])
+    st.session_state.detector = EmotionDetector(models=['DeepFace-Emotion', 'FER', 'Custom-ResNet18'])
 
 def plot_emotion_scores(emotion_scores, title="Emotion Detection Results"):
     """Create a bar chart of emotion scores"""
@@ -54,13 +54,13 @@ def plot_model_comparison(results):
         return None
     
     # Prepare data for comparison
-    emotions = ['angry', 'disgust', 'fear', 'happy', 'sad', 'surprise', 'neutral']
+    emotions = ['angry', 'disgusted', 'fearful', 'happy', 'sad', 'surprised', 'neutral']
     models = list(results['models'].keys())
     
     # Create subplot figure
     fig = go.Figure()
     
-    colors = ['#FF6B6B', '#4ECDC4']
+    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1']
     
     for i, model in enumerate(models):
         if results['models'][model]['status'] == 'success':
@@ -270,19 +270,16 @@ def main():
                         result = st.session_state.prediction_result
                         
                         if result['status'] == 'success' and 'models' in result:
-                            # Map dataset emotions to DeepFace emotions for comparison
+                            # All models now use consistent emotion labels
                             emotion_mapping = {
                                 'happy': 'happy',
                                 'sad': 'sad', 
                                 'angry': 'angry',
-                                'surprised': 'surprise',
-                                'fearful': 'fear',
-                                'disgusted': 'disgust',
+                                'surprised': 'surprised',
+                                'fearful': 'fearful',
+                                'disgusted': 'disgusted',
                                 'neutral': 'neutral'
                             }
-                            
-                            # Get the mapped true emotion
-                            true_emotion_mapped = emotion_mapping.get(current_img['emotion'], current_img['emotion'])
                             
                             # Display model comparison chart
                             comparison_fig = plot_model_comparison(result)
@@ -295,6 +292,9 @@ def main():
                                     dominant_emotion = model_result['dominant_emotion']
                                     emotion_scores = model_result['emotion_scores']
                                     confidence = emotion_scores[dominant_emotion]
+                                    
+                                    # All models now use the same emotion mapping
+                                    true_emotion_mapped = emotion_mapping.get(current_img['emotion'], current_img['emotion'])
                                     
                                     # Show prediction result with color coding
                                     if dominant_emotion == true_emotion_mapped:
@@ -389,19 +389,19 @@ def main():
                 # Add true emotion column
                 df['true_emotion'] = df['image_path'].apply(extract_true_emotion)
                 
-                # Map dataset emotions to DeepFace emotions for comparison
+                # All models now use consistent emotion labels
                 emotion_mapping = {
                     'happy': 'happy',
                     'sad': 'sad', 
                     'angry': 'angry',
-                    'surprised': 'surprise',
-                    'fearful': 'fear',
-                    'disgusted': 'disgust',
+                    'surprised': 'surprised',
+                    'fearful': 'fearful',
+                    'disgusted': 'disgusted',
                     'neutral': 'neutral'
                 }
                 
-                # Map true emotions to match DeepFace output
-                df['true_emotion_mapped'] = df['true_emotion'].map(emotion_mapping)
+                # Apply the same mapping to all models
+                df['true_emotion_mapped'] = df['true_emotion'].map(emotion_mapping).fillna(df['true_emotion'])
                 
                 if is_multi_model:
                     # Multi-model analysis
@@ -446,7 +446,7 @@ def main():
                         go.Bar(
                             x=list(model_names),
                             y=list(accuracies),
-                            marker_color=['#FF6B6B', '#4ECDC4'],
+                            marker_color=['#FF6B6B', '#4ECDC4', '#45B7D1'],
                             text=[f'{acc:.1f}%' for acc in accuracies],
                             textposition='auto',
                         )
@@ -589,7 +589,7 @@ def main():
                             
                             # Create grouped bar chart
                             fig_emotion_comparison = go.Figure()
-                            colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']
+                            colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57']
                             
                             for i, model in enumerate(models):
                                 fig_emotion_comparison.add_trace(go.Bar(
