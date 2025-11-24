@@ -22,6 +22,9 @@ st.set_page_config(
 if 'detector' not in st.session_state:
     st.session_state.detector = EmotionDetector(models=['DeepFace-Emotion', 'FER', 'Custom-ResNet18'])
 
+if 'current_mode' not in st.session_state:
+    st.session_state.current_mode = "Browse Dataset"
+
 def plot_emotion_scores(emotion_scores, title="Emotion Detection Results"):
     """Create a bar chart of emotion scores"""
     emotions = list(emotion_scores.keys())
@@ -117,22 +120,53 @@ def load_sample_images():
     return sample_images
 
 def main():
-    st.title("Emotion Detection from Facial Images")
-    st.markdown("Upload an image or select from sample dataset to detect emotions!")
+    st.title("Multi-Model Emotion Recognition")
     
-    # Main navigation
-    mode = st.selectbox(
-        "Choose Mode",
-        ["Browse Dataset", "Batch Analysis", "Upload Image"]
-    )
+    # Navigation buttons with current mode highlighting
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        button_type = "primary" if st.session_state.current_mode == "Browse Dataset" else "secondary"
+        if st.button("Browse Dataset", use_container_width=True, type=button_type, key="browse_btn"):
+            st.session_state.current_mode = "Browse Dataset"
+            st.rerun()
+    
+    with col2:
+        button_type = "primary" if st.session_state.current_mode == "Batch Analysis" else "secondary"
+        if st.button("Batch Analysis", use_container_width=True, type=button_type, key="batch_btn"):
+            st.session_state.current_mode = "Batch Analysis"
+            st.rerun()
+    
+    with col3:
+        button_type = "primary" if st.session_state.current_mode == "Upload Image" else "secondary"
+        if st.button("Upload Image", use_container_width=True, type=button_type, key="upload_btn"):
+            st.session_state.current_mode = "Upload Image"
+            st.rerun()
+    
+    # Override the default red primary button color with a softer blue
+    st.markdown("""
+    <style>
+    .stButton > button[kind="primary"] {
+        background-color: #0066cc !important;
+        border-color: #0066cc !important;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background-color: #004499 !important;
+        border-color: #004499 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")  # Add separator line
+    
+    mode = st.session_state.current_mode
     
     if mode == "Upload Image":
-        st.header("Upload Your Image")
         
         uploaded_file = st.file_uploader(
-            "Choose an image file",
+            "Upload an image",
             type=['png', 'jpg', 'jpeg', 'bmp', 'tiff'],
-            help="Upload a facial image for emotion detection"
+            label_visibility="hidden"
         )
         
         if uploaded_file is not None:
@@ -142,7 +176,7 @@ def main():
             with col1:
                 st.subheader("Uploaded Image")
                 image = Image.open(uploaded_file)
-                st.image(image, caption="Uploaded Image", use_column_width=True)
+                st.image(image, caption="Uploaded Image", use_container_width=True)
                 
                 # Save uploaded file temporarily
                 temp_path = f"temp_{uploaded_file.name}"
@@ -225,18 +259,15 @@ def main():
             
             current_img = sample_images[st.session_state.current_image_idx]
             
-            st.subheader(f"Dataset Images")
             st.markdown(f"**Image {st.session_state.current_image_idx + 1} of {len(sample_images)}**")
                 
             # Create columns for image and prediction
             col1, col2 = st.columns([1, 1])
             
             with col1:
-                st.markdown(f"**Current Image: {current_img['filename']}**")
                 if os.path.exists(current_img['path']):
                     image = Image.open(current_img['path'])
-                    st.image(image, use_column_width=True)
-                    st.markdown(f"**True Label:** {current_img['emotion'].title()}")
+                    st.image(image, use_container_width=True)
                 
                 # Navigation buttons
                 nav_col1, nav_col2, nav_col3 = st.columns([1, 1, 1])
@@ -245,6 +276,8 @@ def main():
                     if st.button("Previous", disabled=(st.session_state.current_image_idx == 0)):
                         st.session_state.current_image_idx -= 1
                         st.session_state.prediction_result = None
+                        st.session_state.jump_input = ""
+                        st.session_state.prev_jump_input = ""
                         st.rerun()
                 
                 with nav_col2:
@@ -254,10 +287,11 @@ def main():
                     if st.button("Next", disabled=(st.session_state.current_image_idx == len(sample_images) - 1)):
                         st.session_state.current_image_idx += 1
                         st.session_state.prediction_result = None
+                        st.session_state.jump_input = ""
+                        st.session_state.prev_jump_input = ""
                         st.rerun()
                 
                 with col2:
-                    st.markdown("**Model Predictions:**")
                     
                     # Predict button
                     if st.button("Predict Emotion", type="primary"):
@@ -280,6 +314,34 @@ def main():
                                 'disgusted': 'disgusted',
                                 'neutral': 'neutral'
                             }
+                            
+                            # Show true label before the comparison
+                            emotion_colors = {
+                                'angry': '#FF4B4B',
+                                'disgusted': '#8B4B8B', 
+                                'fearful': '#4B4BFF',
+                                'happy': '#4BFF4B',
+                                'neutral': '#808080',
+                                'sad': '#4B8BFF',
+                                'surprised': '#FFB84B'
+                            }
+                            
+                            emotion_color = emotion_colors.get(current_img['emotion'], '#808080')
+                            st.markdown(f"""
+                            <div style="
+                                background-color: {emotion_color}; 
+                                color: white; 
+                                padding: 4px 12px; 
+                                border-radius: 5px; 
+                                text-align: center; 
+                                font-size: 14px; 
+                                font-weight: bold; 
+                                margin: 5px 0;
+                                display: inline-block;
+                            ">
+                                True Label: {current_img['emotion'].upper()}
+                            </div>
+                            """, unsafe_allow_html=True)
                             
                             # Display model comparison chart
                             comparison_fig = plot_model_comparison(result)
@@ -304,54 +366,26 @@ def main():
                                 else:
                                     st.error(f"**{model_name}**: {model_result['error']}")
                             
-                            # Show expected vs predicted comparison
-                            st.markdown(f"**Expected:** {current_img['emotion'].title()}")
-                            
-                            # Show detailed comparison table
-                            comparison_data = {}
-                            for model_name, model_result in result['models'].items():
-                                if model_result['status'] == 'success':
-                                    comparison_data[model_name] = model_result['emotion_scores']
-                            
-                            if comparison_data:
-                                st.markdown("**Detailed Confidence Scores:**")
-                                comparison_df = pd.DataFrame(comparison_data).round(1)
-                                comparison_df.index.name = 'Emotion'
-                                
-                                # Highlight the true emotion row
-                                def highlight_true_emotion(row):
-                                    if row.name == true_emotion_mapped:
-                                        return ['background-color: lightgreen'] * len(row)
-                                    else:
-                                        return [''] * len(row)
-                                
-                                styled_df = comparison_df.style.apply(highlight_true_emotion, axis=1)
-                                st.dataframe(styled_df, use_container_width=True)
-                                
-                                # Show agreement/disagreement
-                                models = list(comparison_data.keys())
-                                if len(models) >= 2:
-                                    predictions = [result['models'][model]['dominant_emotion'] for model in models if result['models'][model]['status'] == 'success']
-                                    if len(set(predictions)) == 1:
-                                        st.info(f"**Models Agree**: Both predict {predictions[0].title()}")
-                                    else:
-                                        st.warning(f"**Models Disagree**: {' vs '.join([pred.title() for pred in predictions])}")
-                            
                         else:
                             st.error(f"Analysis failed: {result.get('error', 'Unknown error')}")
-                    else:
-                        st.info("Click 'Predict Emotion' to analyze this image")
                 
             # Quick jump to image number
             st.markdown("---")
-            jump_col1, jump_col2 = st.columns([3, 1])
-            with jump_col1:
-                jump_to = st.number_input("Jump to image:", min_value=1, max_value=len(sample_images), value=st.session_state.current_image_idx + 1)
-            with jump_col2:
-                if st.button("Go to Image"):
-                    st.session_state.current_image_idx = jump_to - 1
+            if 'prev_jump_input' not in st.session_state:
+                st.session_state.prev_jump_input = ""
+            
+            jump_to = st.text_input(f"Jump to image (1-{len(sample_images)}): Type number and press Enter", 
+                                   placeholder="Enter image number...", key="jump_input")
+            
+            if jump_to != st.session_state.prev_jump_input and jump_to.isdigit():
+                jump_num = int(jump_to)
+                if 1 <= jump_num <= len(sample_images):
+                    st.session_state.current_image_idx = jump_num - 1
                     st.session_state.prediction_result = None
+                    st.session_state.prev_jump_input = jump_to
                     st.rerun()
+            
+            st.session_state.prev_jump_input = jump_to
                 
         else:
             st.warning("No sample images found. Make sure the dataset is in the correct location.")
@@ -461,53 +495,6 @@ def main():
                     )
                     
                     st.plotly_chart(fig_comparison, use_container_width=True)
-                    
-                    # Show agreement analysis
-                    st.subheader("Model Agreement Analysis")
-                    
-                    # Find images processed by both models
-                    image_paths = df['image_path'].unique()
-                    agreement_data = []
-                    
-                    for img_path in image_paths:
-                        img_results = df[df['image_path'] == img_path]
-                        if len(img_results) >= 2:  # Both models processed this image
-                            predictions = {}
-                            for _, row in img_results.iterrows():
-                                if row['status'] == 'success':
-                                    predictions[row['model']] = row['dominant_emotion']
-                            
-                            if len(predictions) >= 2:
-                                pred_values = list(predictions.values())
-                                agree = len(set(pred_values)) == 1
-                                agreement_data.append({
-                                    'image_path': img_path,
-                                    'true_emotion': img_results.iloc[0]['true_emotion_mapped'],
-                                    'predictions': predictions,
-                                    'agree': agree,
-                                    'both_correct': agree and (pred_values[0] == img_results.iloc[0]['true_emotion_mapped']),
-                                    'both_wrong': agree and (pred_values[0] != img_results.iloc[0]['true_emotion_mapped'])
-                                })
-                    
-                    if agreement_data:
-                        total_comparisons = len(agreement_data)
-                        agreements = sum(1 for item in agreement_data if item['agree'])
-                        both_correct = sum(1 for item in agreement_data if item['both_correct'])
-                        both_wrong = sum(1 for item in agreement_data if item['both_wrong'])
-                        disagreements = total_comparisons - agreements
-                        
-                        agreement_cols = st.columns(4)
-                        with agreement_cols[0]:
-                            st.metric("Total Agreements", f"{agreements}/{total_comparisons}")
-                        with agreement_cols[1]:
-                            st.metric("Both Correct", both_correct)
-                        with agreement_cols[2]:
-                            st.metric("Both Wrong", both_wrong)
-                        with agreement_cols[3]:
-                            st.metric("Disagreements", disagreements)
-                        
-                        agreement_rate = (agreements / total_comparisons) * 100 if total_comparisons > 0 else 0
-                        st.write(f"**Agreement Rate: {agreement_rate:.1f}%**")
                 
                 else:
                     # Single model analysis (original logic)
@@ -532,8 +519,6 @@ def main():
                         st.metric("Overall Accuracy", f"{overall_accuracy:.1f}%")
                 
                 # Per-emotion accuracy analysis
-                st.subheader("Accuracy by Emotion Category")
-                
                 if is_multi_model:
                     # Multi-model per-emotion analysis
                     models = df['model'].unique()
@@ -541,9 +526,8 @@ def main():
                     
                     if len(all_successful_df) > 0:
                         unique_true_emotions = all_successful_df['true_emotion'].unique()
-                        st.write(f"**Found emotions in dataset:** {', '.join(unique_true_emotions)}")
                         
-                        # Create comparison table for each emotion
+                        # Create comparison table for each emotion (for chart data only)
                         emotion_comparison = []
                         
                         for true_emotion in unique_true_emotions:
@@ -568,8 +552,6 @@ def main():
                                 emotion_comparison.append(emotion_row)
                         
                         if emotion_comparison:
-                            comparison_df = pd.DataFrame(emotion_comparison)
-                            st.dataframe(comparison_df, use_container_width=True)
                             
                             # Create side-by-side accuracy chart by emotion
                             st.subheader("Per-Emotion Accuracy Comparison")
@@ -646,70 +628,6 @@ def main():
                             for performer in best_performers:
                                 st.write(performer)
                     
-                else:
-                    # Single model per-emotion analysis (original logic)
-                    successful_df = df[df['status'] == 'success'].copy()
-                    if len(successful_df) > 0:
-                        successful_df['correct'] = successful_df['dominant_emotion'] == successful_df['true_emotion_mapped']
-                        
-                        unique_true_emotions = successful_df['true_emotion'].unique()
-                        st.write(f"**Found emotions in dataset:** {', '.join(unique_true_emotions)}")
-                        
-                        emotion_stats = []
-                        
-                        for true_emotion in unique_true_emotions:
-                            if true_emotion != 'unknown':
-                                emotion_data = successful_df[successful_df['true_emotion'] == true_emotion]
-                                
-                                if len(emotion_data) > 0:
-                                    correct_predictions = emotion_data['correct'].sum()
-                                    total_images = len(emotion_data)
-                                    accuracy = (correct_predictions / total_images) * 100
-                                    
-                                    emotion_stats.append({
-                                        'True Emotion': true_emotion.title(),
-                                        'Total Images': total_images,
-                                        'Correct Predictions': correct_predictions,
-                                        'Accuracy (%)': f"{accuracy:.1f}%"
-                                    })
-                        
-                        if emotion_stats:
-                            stats_df = pd.DataFrame(emotion_stats)
-                            st.dataframe(stats_df, use_container_width=True)
-                            
-                            # Accuracy bar chart
-                            accuracy_data = [(row['True Emotion'], float(row['Accuracy (%)'].rstrip('%'))) for _, row in stats_df.iterrows()]
-                            emotions_list, accuracies_list = zip(*accuracy_data)
-                            
-                            accuracy_fig = go.Figure(data=[
-                                go.Bar(
-                                    x=list(emotions_list),
-                                    y=list(accuracies_list),
-                                    marker_color=['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#FF9FF3', '#54A0FF'],
-                                    text=[f'{acc:.1f}%' for acc in accuracies_list],
-                                    textposition='auto',
-                                )
-                            ])
-                            
-                            accuracy_fig.update_layout(
-                                title="Prediction Accuracy by Emotion",
-                                xaxis_title="Emotion",
-                                yaxis_title="Accuracy (%)",
-                                yaxis=dict(range=[0, 100]),
-                                height=400
-                            )
-                            
-                            st.plotly_chart(accuracy_fig, use_container_width=True)
-                
-                # Emotion distribution
-                st.subheader("Emotion Distribution")
-                emotion_counts = df['dominant_emotion'].value_counts()
-                fig_pie = px.pie(
-                    values=emotion_counts.values,
-                    names=emotion_counts.index,
-                    title="Distribution of Detected Emotions"
-                )
-                st.plotly_chart(fig_pie, use_container_width=True)
                 
             else:
                 st.info("No results found. Run the batch analysis first.")
