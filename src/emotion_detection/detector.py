@@ -32,13 +32,54 @@ class EmotionDetector:
     # Public APIs
     # ------------------------------------------------------------------
 
-    def detect_emotion(self, image_path: str) -> Dict:
+    def _extract_face(self, frame: np.ndarray) -> np.ndarray:
+        """
+        Extract the largest face from the frame using OpenCV face detection.
+        Returns the cropped face region or the original frame if no face found.
+        """
+        try:
+            # Load face detection cascade
+            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+            
+            # Convert to grayscale for detection
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            
+            # Detect faces
+            faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+            
+            if len(faces) == 0:
+                return frame  # Return original if no face found
+            
+            # Get the largest face
+            largest_face = max(faces, key=lambda rect: rect[2] * rect[3])
+            x, y, w, h = largest_face
+            
+            # Add some padding around the face
+            padding = 20
+            x = max(0, x - padding)
+            y = max(0, y - padding)
+            w = min(frame.shape[1] - x, w + 2 * padding)
+            h = min(frame.shape[0] - y, h + 2 * padding)
+            
+            # Crop the face region
+            face_crop = frame[y:y+h, x:x+w]
+            return face_crop
+            
+        except Exception:
+            # If face detection fails, return original frame
+            return frame
+
+    def detect_emotion(self, image_path: str, extract_face: bool = True) -> Dict:
         if not os.path.exists(image_path):
             raise FileNotFoundError(image_path)
 
         image = cv2.imread(image_path)
         if image is None:
             raise ValueError(f"Could not read image: {image_path}")
+
+        # Extract face if requested
+        if extract_face:
+            image = self._extract_face(image)
 
         # Process image directly without live stream array method
         results = {
@@ -389,7 +430,7 @@ class EmotionDetector:
             print(f"Processing frame {i+1}/{len(frames_data['frames'])}")
             
             try:
-                # Detect emotions in the frame
+                # Detect emotions in the face-cropped frame
                 emotion_result = self.detect_emotion(frame_info['frame_path'])
                 
                 # Add timestamp information
@@ -458,7 +499,10 @@ class EmotionDetector:
             if frame_count % frame_skip == 0:
                 timestamp = frame_count / fps if fps > 0 else frame_count
                 
-                # Save frame to temporary location or specified directory
+                # Extract face from frame before saving
+                face_frame = self._extract_face(frame)
+                
+                # Save face-cropped frame to temporary location or specified directory
                 if output_dir:
                     frame_filename = f"frame_{frame_count:06d}.jpg"
                     frame_path = os.path.join(output_dir, frame_filename)
@@ -469,8 +513,8 @@ class EmotionDetector:
                     frame_path = temp_file.name
                     temp_file.close()
                 
-                # Save frame
-                cv2.imwrite(frame_path, frame)
+                # Save face-cropped frame
+                cv2.imwrite(frame_path, face_frame)
                 
                 frames.append({
                     'frame_number': frame_count,
