@@ -4,12 +4,18 @@ import sys
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from PIL import Image
 import numpy as np
-
-# Add src to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import cv2
+import queue
+from collections import deque
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode, RTCConfiguration
 from emotion_detection import EmotionDetector
+import random
+import time
+
+
 
 # Page configuration
 st.set_page_config(
@@ -18,38 +24,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize session state
-if 'detector' not in st.session_state:
-    st.session_state.detector = EmotionDetector(models=['DeepFace-Emotion', 'FER', 'Custom-ResNet18'])
-
 if 'current_mode' not in st.session_state:
     st.session_state.current_mode = "Browse Dataset"
 
-def plot_emotion_scores(emotion_scores, title="Emotion Detection Results"):
-    """Create a bar chart of emotion scores"""
-    emotions = list(emotion_scores.keys())
-    scores = list(emotion_scores.values())
-    
-    # Create bar chart
-    fig = go.Figure(data=[
-        go.Bar(
-            x=emotions,
-            y=scores,
-            marker_color=['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#FF9FF3', '#54A0FF'],
-            text=[f'{score:.1f}%' for score in scores],
-            textposition='auto',
-        )
-    ])
-    
-    fig.update_layout(
-        title=title,
-        xaxis_title="Emotions",
-        yaxis_title="Confidence (%)",
-        yaxis=dict(range=[0, 100]),
-        height=400
-    )
-    
-    return fig
+# Initialize global detector once and persist it
+if 'detector' not in st.session_state:
+    st.session_state.detector = EmotionDetector(models=['DeepFace-Emotion', 'FER', 'Custom-ResNet18'])
+
+frame_queue = queue.Queue(maxsize=1)
 
 def plot_model_comparison(results):
     """Create a side-by-side comparison of multiple models"""
@@ -102,28 +84,32 @@ def load_sample_images():
     """Load sample images from dataset"""
     sample_images = []
     base_path = "data/raw/Faces_Dataset/test"
-    
+
     if os.path.exists(base_path):
         emotions = ['angry', 'disgusted', 'fearful', 'happy', 'neutral', 'sad', 'surprised']
         for emotion in emotions:
             emotion_path = os.path.join(base_path, emotion)
             if os.path.exists(emotion_path):
-                images = sorted(os.listdir(emotion_path))[:20]  # Get first 20 images from each category
+
+                images = sorted(os.listdir(emotion_path))[:20]  # first 20 per category
+
                 for img in images:
-                    if img.endswith('.png'):
+                    if img.lower().endswith('.png'):
                         sample_images.append({
                             'path': os.path.join(emotion_path, img),
                             'emotion': emotion,
                             'filename': img
                         })
-    
+
+    random.shuffle(sample_images)
     return sample_images
+
 
 def main():
     st.title("Multi-Model Emotion Recognition")
     
     # Navigation buttons with current mode highlighting
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         button_type = "primary" if st.session_state.current_mode == "Browse Dataset" else "secondary"
@@ -142,6 +128,13 @@ def main():
         if st.button("Upload Image", use_container_width=True, type=button_type, key="upload_btn"):
             st.session_state.current_mode = "Upload Image"
             st.rerun()
+    
+    with col4:
+        button_type = "primary" if st.session_state.current_mode == "Video Analysis" else "secondary"
+        if st.button("Video Analysis", use_container_width=True, type=button_type, key="video_btn"):
+            st.session_state.current_mode = "Video Analysis"
+            st.rerun()
+    
     
     # Override the default red primary button color with a softer blue
     st.markdown("""
@@ -243,8 +236,11 @@ def main():
     
     elif mode == "Browse Dataset":
         st.header("Dataset Image Navigator")
-        
-        sample_images = load_sample_images()
+
+        if 'sample_images' not in st.session_state:
+            st.session_state.sample_images = load_sample_images()
+
+        sample_images = st.session_state.sample_images
         
         if sample_images:
             # Initialize session state for current image index
@@ -389,6 +385,255 @@ def main():
                 
         else:
             st.warning("No sample images found. Make sure the dataset is in the correct location.")
+    
+    elif mode == "Video Analysis":
+        st.header("Video Emotion Analysis")
+        st.write("Upload a video file to analyze emotions frame-by-frame using multiple models.")
+        
+        uploaded_video = st.file_uploader(
+            "Choose a video file",
+            type=['mp4', 'avi', 'mov', 'mkv', 'wmv', 'flv'],
+            help="Upload a video file to analyze emotions frame-by-frame"
+        )
+        
+        if uploaded_video is not None:
+            # Display video details
+            st.subheader("Video Information")
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                # Save uploaded video temporarily
+                temp_video_path = f"temp_{uploaded_video.name}"
+                with open(temp_video_path, "wb") as f:
+                    f.write(uploaded_video.getbuffer())
+                
+                # Display basic video info
+                try:
+                    cap = cv2.VideoCapture(temp_video_path)
+                    fps = cap.get(cv2.CAP_PROP_FPS)
+                    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    duration = frame_count / fps if fps > 0 else 0
+                    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    cap.release()
+                    
+                    st.info(f"**Duration:** {duration:.1f} seconds | **FPS:** {fps:.1f} | **Resolution:** {width}x{height} | **Total Frames:** {frame_count}")
+                    
+                    # Show video preview
+                    st.video(uploaded_video)
+                    
+                except Exception as e:
+                    st.error(f"Error reading video file: {e}")
+            
+            with col2:
+                st.subheader("Processing Settings")
+                
+                # Processing options
+                frame_skip = st.slider(
+                    "Frame Skip (process every Nth frame)",
+                    min_value=1,
+                    max_value=30,
+                    value=5,
+                    help="Higher values = faster processing, lower values = more detailed analysis"
+                )
+                
+                save_frames = st.checkbox(
+                    "Save extracted frames",
+                    value=False,
+                    help="Save individual frames to disk for inspection"
+                )
+                
+                selected_models = st.multiselect(
+                    "Select models for analysis",
+                    options=['FER', 'DeepFace-Emotion', 'Custom-ResNet18'],
+                    default=['FER', 'Custom-ResNet18'],
+                    help="Choose which emotion detection models to use"
+                )
+                
+                if not selected_models:
+                    st.warning("Please select at least one model.")
+                
+                # Process button
+                if st.button("Analyze Video", type="primary", disabled=not selected_models):
+                    try:
+                        frames_output_dir = "temp_video_frames" if save_frames else None
+                        
+                        # Use global detector but only with selected models
+                        video_detector = EmotionDetector(selected_models)
+                        
+                        st.subheader("Processing Video...")
+                        
+                        # Create progress bars
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        
+                        with st.spinner("Extracting frames and analyzing emotions..."):
+                            # Process video
+                            results = video_detector.detect_emotions_video(
+                                video_path=temp_video_path,
+                                frame_skip=frame_skip,
+                                output_dir=frames_output_dir
+                            )
+                            
+                            progress_bar.progress(100)
+                            status_text.text("Processing complete!")
+                        
+                        # Display results
+                        st.subheader("Analysis Results")
+                        
+                        # Video processing summary
+                        processing_info = results['processing_info']
+                        video_info = results['video_info']
+                        
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("Frames Processed", processing_info['total_frames_processed'])
+                        with col2:
+                            st.metric("Processing Rate", f"{processing_info['total_frames_processed'] / video_info['duration_seconds']:.1f} FPS")
+                        with col3:
+                            st.metric("Frame Skip", processing_info['frame_skip'])
+                        with col4:
+                            st.metric("Models Used", len(processing_info['models_used']))
+                        
+                        # Emotion distribution for each model
+                        st.subheader("Emotion Distribution by Model")
+                        
+                        aggregated = results['aggregated_results']
+                        
+                        # Create tabs for each model
+                        model_tabs = st.tabs(selected_models)
+                        
+                        for i, model_name in enumerate(selected_models):
+                            with model_tabs[i]:
+                                if model_name in aggregated['dominant_emotion_distribution']:
+                                    distribution = aggregated['dominant_emotion_distribution'][model_name]
+                                    
+                                    if distribution:
+                                        # Pie chart for emotion distribution
+                                        emotions = list(distribution.keys())
+                                        counts = list(distribution.values())
+                                        
+                                        fig_pie = px.pie(
+                                            values=counts,
+                                            names=emotions,
+                                            title=f"{model_name} - Emotion Distribution",
+                                            color_discrete_sequence=px.colors.qualitative.Set3
+                                        )
+                                        st.plotly_chart(fig_pie, use_container_width=True)
+                                        
+                                        # Show percentages
+                                        total_frames = sum(counts)
+                                        for emotion, count in distribution.items():
+                                            percentage = (count / total_frames) * 100
+                                            st.write(f"**{emotion.title()}:** {count} frames ({percentage:.1f}%)")
+                                    else:
+                                        st.warning(f"No successful detections for {model_name}")
+                                else:
+                                    st.error(f"No results found for {model_name}")
+                        
+                        # Timeline visualization
+                        st.subheader("Emotion Timeline")
+                        
+                        timeline_data = []
+                        for result in results['timeline']:
+                            if result.get('status') == 'success':
+                                for model_name, model_result in result['models'].items():
+                                    if model_result.get('status') == 'success':
+                                        timeline_data.append({
+                                            'timestamp': result['timestamp'],
+                                            'model': model_name,
+                                            'emotion': model_result['dominant_emotion'],
+                                            'confidence': max(model_result['emotion_scores'].values())
+                                        })
+                        
+                        if timeline_data:
+                            timeline_df = pd.DataFrame(timeline_data)
+                            
+                            # Create timeline plot
+                            fig_timeline = px.scatter(
+                                timeline_df,
+                                x='timestamp',
+                                y='emotion',
+                                color='model',
+                                size='confidence',
+                                title="Emotion Timeline Across Models",
+                                labels={'timestamp': 'Time (seconds)', 'emotion': 'Detected Emotion'},
+                                hover_data=['confidence']
+                            )
+                            
+                            fig_timeline.update_layout(height=500)
+                            st.plotly_chart(fig_timeline, use_container_width=True)
+                            
+                            # Emotion changes summary
+                            st.subheader("Emotion Transitions")
+                            
+                            for model_name in selected_models:
+                                if model_name in aggregated['emotion_changes']:
+                                    changes = aggregated['emotion_changes'][model_name]
+                                    if changes:
+                                        st.write(f"**{model_name}** - {len(changes)} transitions:")
+                                        
+                                        changes_df = pd.DataFrame(changes)
+                                        if len(changes_df) > 0:
+                                            # Show first few changes
+                                            display_changes = changes_df.head(10)
+                                            for _, change in display_changes.iterrows():
+                                                st.write(f"• {change['timestamp']:.2f}s: {change['from_emotion']} → {change['to_emotion']}")
+                                            
+                                            if len(changes_df) > 10:
+                                                st.write(f"... and {len(changes_df) - 10} more transitions")
+                                    else:
+                                        st.write(f"**{model_name}**: No emotion transitions detected")
+                        
+                        # Save results option
+                        st.subheader("Download Results")
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            if st.button("Save Results to CSV"):
+                                output_base = f"video_analysis_{uploaded_video.name.split('.')[0]}"
+                                save_paths = video_detector.save_video_results(results, output_base)
+                                
+                                st.success("Results saved!")
+                                for path_name, path in save_paths.items():
+                                    if path:
+                                        st.write(f"• {path_name}: `{path}`")
+                        
+                        with col2:
+                            if timeline_data:
+                                # Prepare download data
+                                download_df = pd.DataFrame(timeline_data)
+                                csv_data = download_df.to_csv(index=False)
+                                
+                                st.download_button(
+                                    label="Download Timeline CSV",
+                                    data=csv_data,
+                                    file_name=f"timeline_{uploaded_video.name.split('.')[0]}.csv",
+                                    mime="text/csv"
+                                )
+                        
+                        # Store results in session state for potential re-analysis
+                        st.session_state['video_results'] = results
+                        
+                    except Exception as e:
+                        st.error(f"Error processing video: {str(e)}")
+                        import traceback
+                        st.code(traceback.format_exc())
+                    
+                    finally:
+                        # Clean up temporary files
+                        if os.path.exists(temp_video_path):
+                            os.remove(temp_video_path)
+                        
+                        # Clean up frame directory if it was temporary
+                        if not save_frames and frames_output_dir and os.path.exists(frames_output_dir):
+                            import shutil
+                            shutil.rmtree(frames_output_dir)
+    
+
+
+        
     
     elif mode == "Batch Analysis":
         st.header("Batch Analysis Results")

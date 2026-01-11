@@ -1,276 +1,232 @@
 import os
 from typing import Dict, List, Union
 import pandas as pd
+import cv2
+import numpy as np
+from pathlib import Path
 
 
 class EmotionDetector:
-    
     def __init__(self, models: Union[str, List[str]] = 'DeepFace-Emotion'):
-        """
-        Initialize the emotion detector.
-        
-        Args:
-            models: Name(s) of the model(s) to use. Can be a single model or list of models.
-                   Available models: 'DeepFace-Emotion', 'FER', 'Custom-ResNet18'
-        """
         if isinstance(models, str):
             self.models = [models]
         else:
             self.models = models
+
         self.supported_formats = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
-        
-        # Initialize custom model components when needed
+        self.supported_video_formats = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv']
+
+        # Cached models / components
         self.custom_model = None
         self.custom_transform = None
         self.custom_classes = None
         self.device = None
+
+        self.fer_detector = None
+
+        # Lazy init FER once
+        if 'FER' in self.models:
+            self._init_fer()
     
+    # ------------------------------------------------------------------
+    # Public APIs
+    # ------------------------------------------------------------------
+
     def detect_emotion(self, image_path: str) -> Dict:
-        """
-        Detect emotion from a single image using all configured models.
-        
-        Args:
-            image_path: Path to the image file
-            
-        Returns:
-            Dictionary containing emotion predictions and confidence scores for each model
-        """
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(image_path)
+
+        image = cv2.imread(image_path)
+        if image is None:
+            raise ValueError(f"Could not read image: {image_path}")
+
+        # Process image directly without live stream array method
         results = {
             'image_path': image_path,
             'models': {},
             'status': 'success'
         }
-        
+
         for model in self.models:
             try:
                 if model == 'DeepFace-Emotion':
-                    result = self._analyze_with_deepface(image_path)
+                    result = self._analyze_with_deepface_array(image)
                 elif model == 'FER':
-                    result = self._analyze_with_fer(image_path)
+                    result = self._analyze_with_fer_array(image)
                 elif model == 'Custom-ResNet18':
-                    result = self._analyze_with_custom_model(image_path)
+                    result = self._analyze_with_custom_model_array(image)
                 else:
                     raise ValueError(f"Unknown model: {model}")
-                
+
                 results['models'][model] = {
                     'dominant_emotion': result['dominant_emotion'],
                     'emotion_scores': result['emotion_scores'],
                     'status': 'success'
                 }
-                
+
             except Exception as e:
                 results['models'][model] = {
-                    'error': str(e),
-                    'status': 'error'
+                    'status': 'error',
+                    'error': str(e)
                 }
-                
-        # Set overall status to error if all models failed
-        if all(model_result['status'] == 'error' for model_result in results['models'].values()):
+
+        if all(m['status'] == 'error' for m in results['models'].values()):
             results['status'] = 'error'
-            
+
         return results
+
     
-    def _analyze_with_deepface(self, image_path: str) -> Dict:
-        """Analyze emotion using DeepFace."""
-        # Import only when needed to avoid conflicts
+    # ------------------------------------------------------------------
+    # DeepFace
+    # ------------------------------------------------------------------
+
+    def _analyze_with_deepface_array(self, frame: np.ndarray) -> Dict:
         from deepface import DeepFace
-        
+
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
         result = DeepFace.analyze(
-            img_path=image_path,
+            img_path=rgb,
             actions=['emotion'],
             enforce_detection=False,
             detector_backend='opencv'
         )
-        
-        # Handle both single face and multiple faces
+
         if isinstance(result, list):
             result = result[0]
-        
-        # Map DeepFace emotion labels to match dataset format
-        emotion_mapping = {
+
+        mapping = {
             'fear': 'fearful',
-            'surprise': 'surprised', 
+            'surprise': 'surprised',
             'disgust': 'disgusted',
             'happy': 'happy',
             'sad': 'sad',
             'angry': 'angry',
             'neutral': 'neutral'
         }
-        
-        # Apply mapping to emotion scores
-        mapped_scores = {}
-        for emotion, score in result['emotion'].items():
-            mapped_emotion = emotion_mapping.get(emotion, emotion)
-            mapped_scores[mapped_emotion] = score
-        
-        # Apply mapping to dominant emotion
-        mapped_dominant = emotion_mapping.get(result['dominant_emotion'], result['dominant_emotion'])
-            
+
+        scores = {mapping.get(k, k): v for k, v in result['emotion'].items()}
+        dominant = mapping.get(result['dominant_emotion'], result['dominant_emotion'])
+
         return {
-            'dominant_emotion': mapped_dominant,
-            'emotion_scores': mapped_scores
+            'dominant_emotion': dominant,
+            'emotion_scores': scores
         }
     
-    def _analyze_with_fer(self, image_path: str) -> Dict:
-        """Analyze emotion using FER library."""
-        # Import only when needed to avoid conflicts
-        import cv2
-        from fer.fer import FER
-        
-        # Initialize FER detector - try different face detection backends
-        emotion_detector = None
-        for use_mtcnn in [False, True]:  # Try without mtcnn first, then with mtcnn
-            try:
-                emotion_detector = FER(mtcnn=use_mtcnn)
-                break
-            except Exception:
-                continue
-        
-        if emotion_detector is None:
-            raise Exception("Failed to initialize FER detector with any configuration")
-        
-        # Read image
-        img = cv2.imread(image_path)
-        if img is None:
-            raise ValueError(f"Could not read image: {image_path}")
-        
-        # Resize image if it's too small for face detection (FER needs larger images)
-        if img.shape[0] < 100 or img.shape[1] < 100:
-            # Resize to at least 224x224 using bicubic interpolation for better quality
-            new_size = max(224, img.shape[0] * 5, img.shape[1] * 5)
-            img = cv2.resize(img, (new_size, new_size), interpolation=cv2.INTER_CUBIC)
-        
-        # Detect emotions
+    # ------------------------------------------------------------------
+    # FER
+    # ------------------------------------------------------------------
+
+    def _init_fer(self):
         try:
-            emotions = emotion_detector.detect_emotions(img)
+            from fer.fer import FER
+        except ImportError:
+            from fer import FER
+
+        try:
+            self.fer_detector = FER(mtcnn=False)
         except Exception:
-            try:
-                emotions = emotion_detector.predict(img)
-            except Exception:
-                emotions = emotion_detector(img)
-        
-        if not emotions:
-            # Try converting image format (sometimes helps with face detection)
-            try:
-                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                emotions = emotion_detector.detect_emotions(img_rgb)
-            except Exception:
-                pass
-        
-        if not emotions:
-            raise ValueError("No face detected in image - tried multiple detection methods")
-        
-        # Get the first face's emotions
-        face_emotions = emotions[0]['emotions']
-        
-        # Find dominant emotion
-        dominant_emotion = max(face_emotions, key=face_emotions.get)
-        
-        # Convert to percentages to match DeepFace format
-        emotion_scores = {k: v * 100 for k, v in face_emotions.items()}
-        
-        # Map FER emotion labels to match dataset format
-        emotion_mapping = {
+            self.fer_detector = FER(mtcnn=True)
+
+    def _analyze_with_fer_array(self, frame: np.ndarray) -> Dict:
+        if self.fer_detector is None:
+            raise RuntimeError("FER detector not initialized")
+
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        detections = self.fer_detector.detect_emotions(rgb)
+
+        if not detections:
+            raise ValueError("No face detected")
+
+        emotions = detections[0]['emotions']
+        dominant = max(emotions, key=emotions.get)
+
+        mapping = {
             'fear': 'fearful',
-            'surprise': 'surprised', 
+            'surprise': 'surprised',
             'disgust': 'disgusted',
             'happy': 'happy',
             'sad': 'sad',
             'angry': 'angry',
             'neutral': 'neutral'
         }
-        
-        # Apply mapping to emotion scores
-        mapped_scores = {}
-        for emotion, score in emotion_scores.items():
-            mapped_emotion = emotion_mapping.get(emotion, emotion)
-            mapped_scores[mapped_emotion] = score
-        
-        # Apply mapping to dominant emotion
-        mapped_dominant = emotion_mapping.get(dominant_emotion, dominant_emotion)
-        
+
+        scores = {mapping.get(k, k): v * 100 for k, v in emotions.items()}
+        dominant = mapping.get(dominant, dominant)
+
         return {
-            'dominant_emotion': mapped_dominant,
-            'emotion_scores': mapped_scores
+            'dominant_emotion': dominant,
+            'emotion_scores': scores
         }
     
-    def _analyze_with_custom_model(self, image_path: str) -> Dict:
-        """Analyze emotion using custom trained ResNet18 model."""
-        # Load model if not already loaded
+    # ------------------------------------------------------------------
+    # Custom ResNet18
+    # ------------------------------------------------------------------
+
+    def _analyze_with_custom_model_array(self, frame: np.ndarray) -> Dict:
         if self.custom_model is None:
             self._load_custom_model()
-        
-        # Import only when needed to avoid conflicts
+
         import torch
         import torch.nn.functional as F
         from PIL import Image
-        
-        # Read and preprocess image
-        img = Image.open(image_path).convert('RGB')
-        img_tensor = self.custom_transform(img).unsqueeze(0).to(self.device)
-        
-        # Get prediction
+
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(rgb)
+
+        tensor = self.custom_transform(img).unsqueeze(0).to(self.device)
+
         with torch.no_grad():
-            logits = self.custom_model(img_tensor)
-            probs = F.softmax(logits, dim=1)
-            
-        # Convert to percentages and create emotion scores dict
-        probs = probs.cpu().numpy()[0]
-        emotion_scores = {
-            emotion: float(prob * 100) 
+            logits = self.custom_model(tensor)
+            probs = F.softmax(logits, dim=1).cpu().numpy()[0]
+
+        scores = {
+            emotion: float(prob * 100)
             for emotion, prob in zip(self.custom_classes, probs)
         }
-        
-        # Find dominant emotion
-        dominant_emotion = max(emotion_scores, key=emotion_scores.get)
-        
+
+        dominant = max(scores, key=scores.get)
+
         return {
-            'dominant_emotion': dominant_emotion,
-            'emotion_scores': emotion_scores
+            'dominant_emotion': dominant,
+            'emotion_scores': scores
         }
     
     def _load_custom_model(self):
-        """Load the custom trained ResNet18 model."""
-        # Import only when needed to avoid conflicts
         import torch
         from torchvision import transforms, models
-        
-        # Path to the trained model
+
         model_path = os.path.join(os.path.dirname(__file__), '../../runs/exp2_clean/best.pt')
-        
         if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Custom model not found at: {model_path}")
-        
-        # Load checkpoint
+            raise FileNotFoundError(model_path)
+
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         checkpoint = torch.load(model_path, map_location=device)
-        
-        # Get model architecture and classes
+
         self.custom_classes = checkpoint['classes']
         num_classes = len(self.custom_classes)
-        
-        # Build model architecture
+
         model = models.resnet18(weights=None)
-        in_feats = model.fc.in_features
         model.fc = torch.nn.Sequential(
-            torch.nn.Dropout(0.3), 
-            torch.nn.Linear(in_feats, num_classes)
+            torch.nn.Dropout(0.3),
+            torch.nn.Linear(model.fc.in_features, num_classes)
         )
-        
-        # Load trained weights
+
         model.load_state_dict(checkpoint['model_state'])
         model.eval()
         model.to(device)
-        
+
         self.custom_model = model
         self.device = device
-        
-        # Define transform (same as training eval transform)
+
         self.custom_transform = transforms.Compose([
-            transforms.Resize(int(224 * 1.15)),
+            transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            transforms.Normalize(
+                [0.485, 0.456, 0.406],
+                [0.229, 0.224, 0.225]
+            )
         ])
     
     def detect_emotions_batch(self, image_folder: str) -> List[Dict]:
@@ -395,3 +351,211 @@ class EmotionDetector:
             }
         
         return comparison
+    
+    def detect_emotions_video(self, video_path: str, frame_skip: int = 30, output_dir: str = None) -> Dict:
+        """
+        Detect emotions from video using frame-by-frame processing.
+        
+        Args:
+            video_path: Path to the video file
+            frame_skip: Process every nth frame (default: 5 for performance)
+            output_dir: Directory to save extracted frames (optional)
+            
+        Returns:
+            Dictionary containing timeline results and aggregated statistics
+        """
+        if not os.path.exists(video_path):
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+        
+        # Check if file is a supported video format
+        file_ext = Path(video_path).suffix.lower()
+        if file_ext not in self.supported_video_formats:
+            raise ValueError(f"Unsupported video format: {file_ext}")
+        
+        print(f"Processing video: {video_path}")
+        
+        # Extract frames from video
+        frames_data = self._extract_frames(video_path, frame_skip, output_dir)
+        
+        if not frames_data['frames']:
+            raise ValueError("No frames extracted from video")
+        
+        print(f"Extracted {len(frames_data['frames'])} frames")
+        
+        # Process each frame for emotion detection
+        timeline_results = []
+        
+        for i, frame_info in enumerate(frames_data['frames']):
+            print(f"Processing frame {i+1}/{len(frames_data['frames'])}")
+            
+            try:
+                # Detect emotions in the frame
+                emotion_result = self.detect_emotion(frame_info['frame_path'])
+                
+                # Add timestamp information
+                emotion_result['timestamp'] = frame_info['timestamp']
+                emotion_result['frame_number'] = frame_info['frame_number']
+                
+                timeline_results.append(emotion_result)
+                
+            except Exception as e:
+                print(f"Error processing frame {i+1}: {e}")
+                timeline_results.append({
+                    'timestamp': frame_info['timestamp'],
+                    'frame_number': frame_info['frame_number'],
+                    'status': 'error',
+                    'error': str(e)
+                })
+        
+        # Aggregate results
+        aggregated_results = self._aggregate_video_results(timeline_results, frames_data)
+        
+        return {
+            'video_path': video_path,
+            'video_info': frames_data['video_info'],
+            'timeline': timeline_results,
+            'aggregated_results': aggregated_results,
+            'processing_info': {
+                'total_frames_processed': len(timeline_results),
+                'frame_skip': frame_skip,
+                'models_used': self.models
+            }
+        }
+    
+    def _extract_frames(self, video_path: str, frame_skip: int, output_dir: str = None) -> Dict:
+        """Extract frames from video."""
+        cap = cv2.VideoCapture(video_path)
+        
+        if not cap.isOpened():
+            raise ValueError(f"Could not open video: {video_path}")
+        
+        # Get video properties
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = total_frames / fps if fps > 0 else 0
+        
+        video_info = {
+            'fps': fps,
+            'total_frames': total_frames,
+            'duration_seconds': duration,
+            'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+            'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        }
+        
+        frames = []
+        frame_count = 0
+        
+        # Create output directory for frames if specified
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+        
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            # Skip frames according to frame_skip parameter
+            if frame_count % frame_skip == 0:
+                timestamp = frame_count / fps if fps > 0 else frame_count
+                
+                # Save frame to temporary location or specified directory
+                if output_dir:
+                    frame_filename = f"frame_{frame_count:06d}.jpg"
+                    frame_path = os.path.join(output_dir, frame_filename)
+                else:
+                    # Use temporary file
+                    import tempfile
+                    temp_file = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
+                    frame_path = temp_file.name
+                    temp_file.close()
+                
+                # Save frame
+                cv2.imwrite(frame_path, frame)
+                
+                frames.append({
+                    'frame_number': frame_count,
+                    'timestamp': timestamp,
+                    'frame_path': frame_path
+                })
+            
+            frame_count += 1
+        
+        cap.release()
+        
+        return {
+            'video_info': video_info,
+            'frames': frames
+        }
+    
+    def _aggregate_video_results(self, timeline_results: List[Dict], frames_data: Dict) -> Dict:
+        """Aggregate emotion detection results across the video timeline."""
+        aggregated = {
+            'emotion_timeline': {},
+            'dominant_emotion_distribution': {},
+            'average_confidence_scores': {},
+            'emotion_changes': {}
+        }
+        
+        # Process results for each model
+        for model_name in self.models:
+            model_timeline = []
+            model_emotions = []
+            confidence_scores = []
+            
+            for result in timeline_results:
+                if (result.get('status') == 'success' and 
+                    model_name in result.get('models', {}) and
+                    result['models'][model_name].get('status') == 'success'):
+                    
+                    model_result = result['models'][model_name]
+                    
+                    timeline_point = {
+                        'timestamp': result['timestamp'],
+                        'frame_number': result['frame_number'],
+                        'dominant_emotion': model_result['dominant_emotion'],
+                        'confidence': max(model_result['emotion_scores'].values()),
+                        'emotion_scores': model_result['emotion_scores']
+                    }
+                    
+                    model_timeline.append(timeline_point)
+                    model_emotions.append(model_result['dominant_emotion'])
+                    confidence_scores.append(model_result['emotion_scores'])
+            
+            # Calculate emotion distribution
+            emotion_distribution = {}
+            for emotion in model_emotions:
+                emotion_distribution[emotion] = emotion_distribution.get(emotion, 0) + 1
+            
+            # Calculate average confidence scores
+            if confidence_scores:
+                avg_scores = {}
+                all_emotions = set()
+                for scores in confidence_scores:
+                    all_emotions.update(scores.keys())
+                
+                for emotion in all_emotions:
+                    scores_for_emotion = [scores.get(emotion, 0) for scores in confidence_scores]
+                    avg_scores[emotion] = np.mean(scores_for_emotion)
+            else:
+                avg_scores = {}
+            
+            # Detect emotion changes (when dominant emotion changes between consecutive frames)
+            emotion_changes = []
+            for i in range(1, len(model_timeline)):
+                prev_emotion = model_timeline[i-1]['dominant_emotion']
+                curr_emotion = model_timeline[i]['dominant_emotion']
+                
+                if prev_emotion != curr_emotion:
+                    emotion_changes.append({
+                        'timestamp': model_timeline[i]['timestamp'],
+                        'frame_number': model_timeline[i]['frame_number'],
+                        'from_emotion': prev_emotion,
+                        'to_emotion': curr_emotion
+                    })
+            
+            aggregated['emotion_timeline'][model_name] = model_timeline
+            aggregated['dominant_emotion_distribution'][model_name] = emotion_distribution
+            aggregated['average_confidence_scores'][model_name] = avg_scores
+            aggregated['emotion_changes'][model_name] = emotion_changes
+        
+        return aggregated
