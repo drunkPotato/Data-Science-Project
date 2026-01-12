@@ -8,9 +8,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from PIL import Image
 import numpy as np
 import cv2
-import queue
-from collections import deque
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode, RTCConfiguration
 from emotion_detection import EmotionDetector
 import random
 import time
@@ -30,8 +27,6 @@ if 'current_mode' not in st.session_state:
 # Initialize global detector once and persist it
 if 'detector' not in st.session_state:
     st.session_state.detector = EmotionDetector(models=['DeepFace-Emotion', 'FER', 'Custom-ResNet18'])
-
-frame_queue = queue.Queue(maxsize=1)
 
 def plot_model_comparison(results):
     """Create a side-by-side comparison of multiple models"""
@@ -210,7 +205,8 @@ def main():
                             
                             st.info(f"✅ Face-cropped image saved to: `{processed_path}`")
                         
-                        result = st.session_state.detector.detect_emotion(temp_path)
+                        # Uploaded images should have face extraction enabled
+                        result = st.session_state.detector.detect_emotion(temp_path, extract_face=True)
                         
                         if result['status'] == 'success' and 'models' in result:
                             # Display model comparison chart
@@ -321,7 +317,8 @@ def main():
                     # Predict button
                     if st.button("Predict Emotion", type="primary"):
                         with st.spinner("Analyzing emotion with multiple models..."):
-                            result = st.session_state.detector.detect_emotion(current_img['path'])
+                            # Dataset images are already cropped faces, don't extract face
+                            result = st.session_state.detector.detect_emotion(current_img['path'], extract_face=False)
                             st.session_state.prediction_result = result
                     
                     # Show prediction results if available
@@ -812,8 +809,118 @@ def main():
                             
                             for performer in best_performers:
                                 st.write(performer)
-                    
-                
+
+                            # Confusion Matrices
+                            st.subheader("Confusion Matrices")
+
+                            # Create confusion matrix for each model
+                            for model in models:
+                                model_df = all_successful_df[all_successful_df['model'] == model].copy()
+
+                                if len(model_df) > 0:
+                                    # Get all emotion labels
+                                    all_emotions = sorted(list(set(list(model_df['true_emotion_mapped']) + list(model_df['dominant_emotion']))))
+
+                                    # Create confusion matrix
+                                    confusion_data = []
+                                    for true_emotion in all_emotions:
+                                        row = []
+                                        for pred_emotion in all_emotions:
+                                            count = len(model_df[
+                                                (model_df['true_emotion_mapped'] == true_emotion) &
+                                                (model_df['dominant_emotion'] == pred_emotion)
+                                            ])
+                                            row.append(count)
+                                        confusion_data.append(row)
+
+                                    # Create heatmap
+                                    fig_cm = go.Figure(data=go.Heatmap(
+                                        z=confusion_data,
+                                        x=all_emotions,
+                                        y=all_emotions,
+                                        colorscale='Blues',
+                                        text=confusion_data,
+                                        texttemplate='%{text}',
+                                        textfont={"size": 10},
+                                        hoverongaps=False
+                                    ))
+
+                                    fig_cm.update_layout(
+                                        title=f"{model} - Confusion Matrix",
+                                        xaxis_title="Predicted Emotion",
+                                        yaxis_title="True Emotion",
+                                        height=500,
+                                        width=500
+                                    )
+
+                                    st.plotly_chart(fig_cm, use_container_width=False)
+
+                            # Confidence vs Correctness
+                            st.subheader("Confidence vs Correctness Analysis")
+
+                            for model in models:
+                                model_df = all_successful_df[all_successful_df['model'] == model].copy()
+
+                                if len(model_df) > 0:
+                                    # Extract confidence scores
+                                    confidences = []
+                                    correctness = []
+
+                                    for idx, row in model_df.iterrows():
+                                        dominant = row['dominant_emotion']
+                                        # Find the confidence score for the dominant emotion
+                                        score_col = f"{dominant}_score"
+                                        if score_col in row:
+                                            confidence = row[score_col]
+                                            correct = row['dominant_emotion'] == row['true_emotion_mapped']
+                                            confidences.append(confidence)
+                                            correctness.append('Correct' if correct else 'Incorrect')
+
+                                    if confidences:
+                                        # Create scatter plot
+                                        fig_conf = go.Figure()
+
+                                        # Separate correct and incorrect
+                                        correct_conf = [c for c, cor in zip(confidences, correctness) if cor == 'Correct']
+                                        incorrect_conf = [c for c, cor in zip(confidences, correctness) if cor == 'Incorrect']
+
+                                        fig_conf.add_trace(go.Histogram(
+                                            x=correct_conf,
+                                            name='Correct',
+                                            marker_color='#4ECDC4',
+                                            opacity=0.7,
+                                            nbinsx=20
+                                        ))
+
+                                        fig_conf.add_trace(go.Histogram(
+                                            x=incorrect_conf,
+                                            name='Incorrect',
+                                            marker_color='#FF6B6B',
+                                            opacity=0.7,
+                                            nbinsx=20
+                                        ))
+
+                                        fig_conf.update_layout(
+                                            title=f"{model} - Confidence Distribution by Correctness",
+                                            xaxis_title="Confidence Score (%)",
+                                            yaxis_title="Count",
+                                            barmode='overlay',
+                                            height=400,
+                                            legend=dict(x=0.7, y=0.95)
+                                        )
+
+                                        st.plotly_chart(fig_conf, use_container_width=True)
+
+                                        # Add statistics
+                                        col1, col2 = st.columns(2)
+                                        with col1:
+                                            avg_correct = np.mean(correct_conf) if correct_conf else 0
+                                            st.metric(f"{model} Avg Confidence (Correct)", f"{avg_correct:.1f}%")
+                                        with col2:
+                                            avg_incorrect = np.mean(incorrect_conf) if incorrect_conf else 0
+                                            st.metric(f"{model} Avg Confidence (Incorrect)", f"{avg_incorrect:.1f}%")
+
+
             else:
                 st.info("No results found. Run the batch analysis first.")
         else:

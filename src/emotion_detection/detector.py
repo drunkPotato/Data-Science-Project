@@ -40,31 +40,31 @@ class EmotionDetector:
         try:
             # Load face detection cascade
             face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-            
+
             # Convert to grayscale for detection
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            
+
             # Detect faces
             faces = face_cascade.detectMultiScale(gray, 1.1, 4)
-            
+
             if len(faces) == 0:
                 return frame  # Return original if no face found
-            
+
             # Get the largest face
             largest_face = max(faces, key=lambda rect: rect[2] * rect[3])
             x, y, w, h = largest_face
-            
+
             # Add some padding around the face
             padding = 20
             x = max(0, x - padding)
             y = max(0, y - padding)
             w = min(frame.shape[1] - x, w + 2 * padding)
             h = min(frame.shape[0] - y, h + 2 * padding)
-            
+
             # Crop the face region
             face_crop = frame[y:y+h, x:x+w]
             return face_crop
-            
+
         except Exception:
             # If face detection fails, return original frame
             return frame
@@ -77,11 +77,25 @@ class EmotionDetector:
         if image is None:
             raise ValueError(f"Could not read image: {image_path}")
 
+        original_shape = image.shape
+
+        # Upscale small images minimally for face detection
+        # Face detectors need at least ~50-80 pixels, but minimize upscaling to reduce artifacts
+        min_dimension = min(original_shape[0], original_shape[1])
+        if min_dimension < 60:
+            # Calculate minimal upscale factor to reach 96x96 (2x for 48x48 images)
+            # This is much better than 224x224 (4.67x) - less pixelation
+            target_size = 96
+            # Use LANCZOS interpolation for better quality upscaling
+            image = cv2.resize(image, (target_size, target_size), interpolation=cv2.INTER_LANCZOS4)
+            # Small images are likely already cropped faces, don't try to extract face again
+            extract_face = False
+
         # Extract face if requested
         if extract_face:
             image = self._extract_face(image)
 
-        # Process image directly without live stream array method
+        # Process image with all configured models
         results = {
             'image_path': image_path,
             'models': {},
@@ -91,11 +105,11 @@ class EmotionDetector:
         for model in self.models:
             try:
                 if model == 'DeepFace-Emotion':
-                    result = self._analyze_with_deepface_array(image)
+                    result = self._analyze_with_deepface(image)
                 elif model == 'FER':
-                    result = self._analyze_with_fer_array(image)
+                    result = self._analyze_with_fer(image)
                 elif model == 'Custom-ResNet18':
-                    result = self._analyze_with_custom_model_array(image)
+                    result = self._analyze_with_custom_model(image)
                 else:
                     raise ValueError(f"Unknown model: {model}")
 
@@ -121,7 +135,7 @@ class EmotionDetector:
     # DeepFace
     # ------------------------------------------------------------------
 
-    def _analyze_with_deepface_array(self, frame: np.ndarray) -> Dict:
+    def _analyze_with_deepface(self, frame: np.ndarray) -> Dict:
         from deepface import DeepFace
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -165,46 +179,94 @@ class EmotionDetector:
             from fer import FER
 
         try:
-            self.fer_detector = FER(mtcnn=False)
-        except Exception:
             self.fer_detector = FER(mtcnn=True)
+        except Exception:
+            self.fer_detector = FER(mtcnn=False)
 
-    def _analyze_with_fer_array(self, frame: np.ndarray) -> Dict:
+            # Adjust parameters for better detection on upscaled low-res images
+            try:
+                self.fer_detector._FER__scale_factor = 1.05
+                self.fer_detector._FER__min_neighbors = 3
+                old_min_size = getattr(self.fer_detector, '_FER__min_face_size', None)
+                if isinstance(old_min_size, int):
+                    self.fer_detector._FER__min_face_size = 20
+            except Exception:
+                pass
+
+    def _analyze_with_fer(self, frame: np.ndarray) -> dict:
         if self.fer_detector is None:
             raise RuntimeError("FER detector not initialized")
 
+        # FER expects RGB
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # Normal FER pipeline
         detections = self.fer_detector.detect_emotions(rgb)
 
-        if not detections:
-            raise ValueError("No face detected")
+        face_detected = True
+        
 
-        emotions = detections[0]['emotions']
+        # --------------------------------------------------
+        # FALLBACK: no face detected → analyze whole image
+        # --------------------------------------------------
+        if not detections:
+            face_detected = False
+
+            # Convert to grayscale
+            gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+
+            # Resize to FER emotion input size
+            target_size = self.fer_detector._FER__emotion_target_size
+            gray = cv2.resize(gray, target_size)
+
+            # Normalize exactly like FER
+            gray = gray.astype("float32") / 255.0
+            gray = (gray - 0.5) * 2.0
+
+            # Run classifier directly (uses TF / TFLite / TF-Serving internally)
+            preds = self.fer_detector._classify_emotions(
+                np.expand_dims(gray, axis=0)
+            )[0]
+
+            emotion_labels = self.fer_detector._get_labels()
+            emotions = {
+                emotion_labels[i]: round(float(pred), 4)
+                for i, pred in enumerate(preds)
+            }
+
+        else:
+            emotions = detections[0]["emotions"]
+
+        # --------------------------------------------------
+        # Post-processing
+        # --------------------------------------------------
         dominant = max(emotions, key=emotions.get)
 
         mapping = {
-            'fear': 'fearful',
-            'surprise': 'surprised',
-            'disgust': 'disgusted',
-            'happy': 'happy',
-            'sad': 'sad',
-            'angry': 'angry',
-            'neutral': 'neutral'
+            "fear": "fearful",
+            "surprise": "surprised",
+            "disgust": "disgusted",
+            "happy": "happy",
+            "sad": "sad",
+            "angry": "angry",
+            "neutral": "neutral",
         }
 
         scores = {mapping.get(k, k): v * 100 for k, v in emotions.items()}
         dominant = mapping.get(dominant, dominant)
 
         return {
-            'dominant_emotion': dominant,
-            'emotion_scores': scores
+            "dominant_emotion": dominant,
+            "emotion_scores": scores,
+            "face_detected": face_detected,
         }
+
     
     # ------------------------------------------------------------------
     # Custom ResNet18
     # ------------------------------------------------------------------
 
-    def _analyze_with_custom_model_array(self, frame: np.ndarray) -> Dict:
+    def _analyze_with_custom_model(self, frame: np.ndarray) -> Dict:
         if self.custom_model is None:
             self._load_custom_model()
 
@@ -270,34 +332,35 @@ class EmotionDetector:
             )
         ])
     
-    def detect_emotions_batch(self, image_folder: str) -> List[Dict]:
+    def detect_emotions_batch(self, image_folder: str, extract_face: bool = True) -> List[Dict]:
         """
         Detect emotions from all images in a folder.
-        
+
         Args:
             image_folder: Path to folder containing images
-            
+            extract_face: Whether to extract and crop faces before detection
+
         Returns:
             List of dictionaries containing results for each image
         """
         results = []
-        
+
         if not os.path.exists(image_folder):
             raise FileNotFoundError(f"Folder not found: {image_folder}")
-        
+
         # Get all image files
         image_files = []
         for file in os.listdir(image_folder):
             if any(file.lower().endswith(ext) for ext in self.supported_formats):
                 image_files.append(os.path.join(image_folder, file))
-        
+
         print(f"Processing {len(image_files)} images...")
-        
+
         for i, image_path in enumerate(image_files):
             print(f"Processing {i+1}/{len(image_files)}: {os.path.basename(image_path)}")
-            result = self.detect_emotion(image_path)
+            result = self.detect_emotion(image_path, extract_face=extract_face)
             results.append(result)
-        
+
         return results
     
     def save_results(self, results: List[Dict], output_path: str):
@@ -431,12 +494,13 @@ class EmotionDetector:
             
             try:
                 # Detect emotions in the face-cropped frame
-                emotion_result = self.detect_emotion(frame_info['frame_path'])
-                
+                # Frames are already cropped in _extract_frames, so don't extract face again
+                emotion_result = self.detect_emotion(frame_info['frame_path'], extract_face=False)
+
                 # Add timestamp information
                 emotion_result['timestamp'] = frame_info['timestamp']
                 emotion_result['frame_number'] = frame_info['frame_number']
-                
+
                 timeline_results.append(emotion_result)
                 
             except Exception as e:

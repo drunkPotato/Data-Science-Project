@@ -22,45 +22,9 @@ def main():
     print("\n=== Multiple Image Detection (First 10) ===")
     test_folder = "data/raw/Faces_Dataset/test/happy"
     
-    if os.path.exists(test_folder):
-        # Get first 10 images from happy folder
-        image_files = []
-        for file in sorted(os.listdir(test_folder)):
-            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
-                image_files.append(os.path.join(test_folder, file))
-            if len(image_files) >= 10:  # Stop at 10 images
-                break
-        
-        if image_files:
-            print(f"Processing {len(image_files)} images from happy folder...")
-            
-            for i, image_path in enumerate(image_files, 1):
-                print(f"\n{'='*50}")
-                print(f"IMAGE {i}: {os.path.basename(image_path)}")
-                print('='*50)
-                
-                result = detector.detect_emotion(image_path)
-                if result['status'] == 'success':
-                    for model_name, model_result in result['models'].items():
-                        if model_result['status'] == 'success':
-                            print(f"\n{model_name} Model:")
-                            print(f"  Dominant emotion: {model_result['dominant_emotion']}")
-                            print("  All emotion scores:")
-                            for emotion, score in model_result['emotion_scores'].items():
-                                print(f"    {emotion}: {score:.2f}%")
-                        else:
-                            print(f"\n{model_name} Model: Error - {model_result['error']}")
-                else:
-                    print(f"Error processing image: {result.get('error', 'Unknown error')}")
-        else:
-            print("No image files found in happy folder")
-    else:
-        print(f"Test folder not found at {test_folder}")
-        print("Please check the dataset path")
     
     # Example 2: Batch processing with model comparison
-    print("\n=== Batch Processing with Model Comparison ===")
-    input_folder = "data/raw/Faces_Dataset/test/happy"
+    print("\n=== Batch Processing with Model Comparison ===")   
     output_file = "data/processed/emotion_results_comparison.csv"
     base_folder = "data/raw/Faces_Dataset/test"
     
@@ -73,7 +37,8 @@ def main():
             if os.path.exists(emotion_folder) and os.listdir(emotion_folder):
                 print(f"\nProcessing {emotion} images...")
                 try:
-                    results = detector.detect_emotions_batch(emotion_folder)
+                    # Dataset images are already cropped faces, don't extract face
+                    results = detector.detect_emotions_batch(emotion_folder, extract_face=False)
                     all_results.extend(results)
                     
                     successful = len([r for r in results if r['status'] == 'success'])
@@ -112,7 +77,8 @@ def main():
     single_detector = EmotionDetector(models='DeepFace-Emotion')
     
     if os.path.exists("data/raw/Faces_Dataset/test/happy/im0.png"):
-        single_result = single_detector.detect_emotion("data/raw/Faces_Dataset/test/happy/im0.png")
+        # Dataset images are already cropped faces, don't extract face
+        single_result = single_detector.detect_emotion("data/raw/Faces_Dataset/test/happy/im0.png", extract_face=False)
         if single_result['status'] == 'success':
             deepface_result = single_result['models']['DeepFace-Emotion']
             if deepface_result['status'] == 'success':
