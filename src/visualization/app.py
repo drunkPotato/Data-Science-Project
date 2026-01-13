@@ -10,7 +10,8 @@ import numpy as np
 import cv2
 from emotion_detection import EmotionDetector
 import random
-import time
+import traceback
+import shutil
 
 
 
@@ -190,7 +191,6 @@ def main():
                     try:
                         # Save face-cropped image if requested
                         if save_processed_image:
-                            import cv2
                             # Load and crop face from uploaded image
                             image = cv2.imread(temp_path)
                             cropped_face = st.session_state.detector._extract_face(image)
@@ -555,7 +555,6 @@ def main():
                         
                     except Exception as e:
                         st.error(f"Error processing video: {str(e)}")
-                        import traceback
                         st.code(traceback.format_exc())
                     
                     finally:
@@ -565,7 +564,6 @@ def main():
                         
                         # Clean up frame directory if it was temporary
                         if not save_frames and frames_output_dir and os.path.exists(frames_output_dir):
-                            import shutil
                             shutil.rmtree(frames_output_dir)
     
 

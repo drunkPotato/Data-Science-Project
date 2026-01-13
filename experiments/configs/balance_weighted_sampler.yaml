@@ -1,0 +1,36 @@
+name: balance_weighted_sampler
+description: Use weighted sampler to oversample minority classes
+
+model:
+  arch: resnet18
+  dropout: 0.3
+  pretrained: true
+
+training:
+  epochs: 30
+  batch_size: 128
+  eval_batch_size: 256
+  lr: 0.0003
+  weight_decay: 0.05
+  optimizer: adamw
+  freeze_epochs: 0
+  onecycle_pct_start: 0.3
+
+loss:
+  type: ce
+  label_smoothing: 0.1
+  focal_gamma: 2.0
+  use_class_weights: true
+
+augmentation:
+  mixup_alpha: 0.2
+  random_erasing: 0.0
+
+data:
+  img_size: 224
+  weighted_sampler: true
+
+other:
+  patience: 7
+  seed: 42
+  workers: 8

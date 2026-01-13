@@ -230,8 +230,8 @@ def load_datasets(data_root, img_size, erasing_p):
 # Metrics / Evaluation
 # -----------------------------
 
-def evaluate(model, loader, device, num_classes, return_cm=False):
-    from sklearn.metrics import f1_score, confusion_matrix, accuracy_score
+def evaluate(model, loader, device, num_classes, return_cm=False, return_per_class=False):
+    from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, precision_score, recall_score
     model.eval()
     ys, ps = [], []
     with torch.no_grad():
@@ -247,11 +247,26 @@ def evaluate(model, loader, device, num_classes, return_cm=False):
     y_pred = np.concatenate(ps)
     acc = accuracy_score(y_true, y_pred)
     macro_f1 = f1_score(y_true, y_pred, average="macro")
+
     cm = None
+    per_class_metrics = None
+
     if return_cm:
         from sklearn.metrics import confusion_matrix as cm_fn
         cm = cm_fn(y_true, y_pred, labels=list(range(num_classes)))
-    return acc, macro_f1, cm
+
+    if return_per_class:
+        precision_per_class = precision_score(y_true, y_pred, average=None, labels=list(range(num_classes)), zero_division=0)
+        recall_per_class = recall_score(y_true, y_pred, average=None, labels=list(range(num_classes)), zero_division=0)
+        f1_per_class = f1_score(y_true, y_pred, average=None, labels=list(range(num_classes)), zero_division=0)
+
+        per_class_metrics = {
+            "precision": precision_per_class.tolist(),
+            "recall": recall_per_class.tolist(),
+            "f1": f1_per_class.tolist()
+        }
+
+    return acc, macro_f1, cm, per_class_metrics
 
 
 # -----------------------------
@@ -397,7 +412,7 @@ def train(args):
             pbar.set_postfix({"loss": f"{loss.item():.4f}", "lr": f"{current_lr:.1e}"})
 
         # Validation
-        val_acc, val_f1, cm = evaluate(model, val_loader, device, num_classes, return_cm=True)
+        val_acc, val_f1, cm, per_class_metrics = evaluate(model, val_loader, device, num_classes, return_cm=True, return_per_class=True)
         train_loss = running_loss / len(train_loader.dataset)
 
         history.append({
@@ -423,10 +438,21 @@ def train(args):
                 "args": vars(args),
                 "val_macro_f1": float(val_f1),
                 "val_acc": float(val_acc),
+                "val_per_class_metrics": per_class_metrics
             }
             torch.save(ckpt, os.path.join(args.out_dir, "best.pt"))
             if cm is not None:
                 np.save(os.path.join(args.out_dir, "best_confusion_matrix.npy"), cm)
+            with open(os.path.join(args.out_dir, "best_metrics.json"), "w") as f:
+                json.dump({
+                    "val_acc": float(val_acc),
+                    "val_macro_f1": float(val_f1),
+                    "per_class": {idx_to_class[i]: {
+                        "precision": per_class_metrics["precision"][i],
+                        "recall": per_class_metrics["recall"][i],
+                        "f1": per_class_metrics["f1"][i]
+                    } for i in range(num_classes)}
+                }, f, indent=2)
         else:
             bad_epochs += 1
             if bad_epochs >= args.patience:
@@ -442,11 +468,19 @@ def train(args):
         print("Evaluating best checkpoint on test set...")
         ckpt = torch.load(os.path.join(args.out_dir, "best.pt"), map_location=device)
         model.load_state_dict(ckpt["model_state"])
-        test_acc, test_f1, test_cm = evaluate(model, test_loader, device, num_classes, return_cm=True)
+        test_acc, test_f1, test_cm, test_per_class = evaluate(model, test_loader, device, num_classes, return_cm=True, return_per_class=True)
         print(f"TEST | acc={test_acc:.4f} | macroF1={test_f1:.4f}")
         np.save(os.path.join(args.out_dir, "test_confusion_matrix.npy"), test_cm)
         with open(os.path.join(args.out_dir, "test_metrics.json"), "w") as f:
-            json.dump({"test_acc": float(test_acc), "test_macro_f1": float(test_f1)}, f, indent=2)
+            json.dump({
+                "test_acc": float(test_acc),
+                "test_macro_f1": float(test_f1),
+                "per_class": {idx_to_class[i]: {
+                    "precision": test_per_class["precision"][i],
+                    "recall": test_per_class["recall"][i],
+                    "f1": test_per_class["f1"][i]
+                } for i in range(num_classes)}
+            }, f, indent=2)
 
 
 # -----------------------------

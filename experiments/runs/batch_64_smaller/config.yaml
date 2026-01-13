@@ -1,0 +1,30 @@
+augmentation:
+  mixup_alpha: 0.2
+  random_erasing: 0.0
+data:
+  img_size: 224
+  weighted_sampler: false
+description: Smaller batch size (64) for potentially better generalization
+loss:
+  focal_gamma: 2.0
+  label_smoothing: 0.1
+  type: ce
+  use_class_weights: true
+model:
+  arch: resnet18
+  dropout: 0.3
+  pretrained: true
+name: batch_64_smaller
+other:
+  patience: 7
+  seed: 42
+  workers: 8
+training:
+  batch_size: 64
+  epochs: 30
+  eval_batch_size: 256
+  freeze_epochs: 0
+  lr: 0.0003
+  onecycle_pct_start: 0.3
+  optimizer: adamw
+  weight_decay: 0.05
