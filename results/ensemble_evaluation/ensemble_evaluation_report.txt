@@ -1,0 +1,38 @@
+================================================================================
+ENSEMBLE EVALUATION REPORT
+Strategy: Custom-ResNet18 + Override when DeepFace & FER Agree
+================================================================================
+
+OVERALL PERFORMANCE COMPARISON:
+--------------------------------------------------------------------------------
+Model                         Accuracy    Precision       Recall     F1-Score
+--------------------------------------------------------------------------------
+DeepFace-Emotion                48.76%       25.43%       26.75%       25.94%
+FER                             52.84%       29.88%       30.64%       29.56%
+Custom-ResNet18                 37.87%       24.18%       23.59%       22.29%
+Ensemble                        50.59%       27.93%       29.33%       28.09%
+
+ENSEMBLE IMPROVEMENT OVER CUSTOM-RESNET18:
+--------------------------------------------------------------------------------
+Accuracy improvement: +12.71%
+F1-Score improvement: +5.80%
+
+OVERRIDE ANALYSIS:
+--------------------------------------------------------------------------------
+Total predictions: 3068
+Times DeepFace & FER agreed (and differed from Custom): 767
+  - Overrides that helped (Custom wrong → Override right): 459
+  - Overrides that hurt (Custom right → Override wrong): 69
+  - Both were wrong: 239
+  - Both were right: 0
+Net gain from overrides: +390 correct predictions
+
+AGREEMENT PATTERNS:
+--------------------------------------------------------------------------------
+All 3 Agree                   :   875 ( 28.5%)
+Custom + DeepFace             :   333 ( 10.9%)
+Custom + FER                  :   447 ( 14.6%)
+DeepFace + FER (Override)     :   767 ( 25.0%)
+All Disagree                  :   646 ( 21.1%)
+
+================================================================================

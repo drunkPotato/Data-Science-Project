@@ -1,0 +1,81 @@
+======================================================================
+DATA QUALITY ASSESSMENT: EMOTION DATASET 3
+======================================================================
+
+CSV LABEL FILES:
+----------------------------------------------------------------------
+
+TRAIN SPLIT:
+  STATUS: PASS
+  Total records: 12271
+  Label distribution:
+         angry:   1290 images
+     disgusted:    281 images
+       fearful:    717 images
+         happy:   4772 images
+           sad:   1982 images
+     surprised:    705 images
+       neutral:   2524 images
+
+TEST SPLIT:
+  STATUS: PASS
+  Total records: 3068
+  Label distribution:
+         angry:    329 images
+     disgusted:     74 images
+       fearful:    160 images
+         happy:   1185 images
+           sad:    478 images
+     surprised:    162 images
+       neutral:    680 images
+
+IMAGE FILES VERIFICATION:
+----------------------------------------------------------------------
+
+TRAIN SPLIT:
+  Expected images: 12271
+  Found images: 12271
+  [PASS] All images are readable
+  File formats:
+    .jpg: 12271 files (100.0%)
+
+TEST SPLIT:
+  Expected images: 3068
+  Found images: 3068
+  [PASS] All images are readable
+  File formats:
+    .jpg: 3068 files (100.0%)
+
+DUPLICATE DETECTION:
+----------------------------------------------------------------------
+Total files: 15339
+Unique files: 15336
+Duplicates: 3
+[WARNING] Found 3 duplicate groups:
+  Group 1: 2 copies
+    - /mnt/c/Users/corsi/Coding Projects/Data Science Project/data/raw/emotion dataset 3/DATASET/train/4/train_03282_aligned.jpg
+    - /mnt/c/Users/corsi/Coding Projects/Data Science Project/data/raw/emotion dataset 3/DATASET/train/4/train_03285_aligned.jpg
+  Group 2: 2 copies
+    - /mnt/c/Users/corsi/Coding Projects/Data Science Project/data/raw/emotion dataset 3/DATASET/train/6/train_08539_aligned.jpg
+    - /mnt/c/Users/corsi/Coding Projects/Data Science Project/data/raw/emotion dataset 3/DATASET/train/6/train_08540_aligned.jpg
+  Group 3: 2 copies
+    - /mnt/c/Users/corsi/Coding Projects/Data Science Project/data/raw/emotion dataset 3/DATASET/test/7/test_2809_aligned.jpg
+    - /mnt/c/Users/corsi/Coding Projects/Data Science Project/data/raw/emotion dataset 3/DATASET/test/7/test_2810_aligned.jpg
+
+CLASS BALANCE ANALYSIS:
+----------------------------------------------------------------------
+       angry:   1619 images ( 10.6%)
+   disgusted:    355 images (  2.3%)
+     fearful:    877 images (  5.7%)
+       happy:   5957 images ( 38.8%)
+         sad:   2460 images ( 16.0%)
+   surprised:    867 images (  5.7%)
+     neutral:   3204 images ( 20.9%)
+  [WARNING] Class imbalances detected:
+    - 'disgusted' severely underrepresented (<5%)
+
+OVERALL SUMMARY:
+----------------------------------------------------------------------
+[PASS] Dataset structure is valid
+
+======================================================================

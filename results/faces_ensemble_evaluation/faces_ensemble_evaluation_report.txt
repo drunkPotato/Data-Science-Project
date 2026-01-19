@@ -1,0 +1,53 @@
+================================================================================
+ENSEMBLE EVALUATION REPORT - FACES_DATASET
+Strategy: Custom-ResNet18 + Override when DeepFace & FER Agree
+================================================================================
+
+OVERALL PERFORMANCE COMPARISON:
+--------------------------------------------------------------------------------
+Model                         Accuracy    Precision       Recall     F1-Score
+--------------------------------------------------------------------------------
+DeepFace-Emotion                53.13%       51.57%       47.46%       48.76%
+FER                             63.33%       60.36%       58.33%       58.95%
+Custom-ResNet18                 67.59%       66.29%       62.87%       63.97%
+Ensemble                        67.85%       67.54%       62.40%       63.86%
+
+ENSEMBLE IMPROVEMENT OVER CUSTOM-RESNET18:
+--------------------------------------------------------------------------------
+Accuracy improvement: +0.25%
+F1-Score improvement: -0.12%
+
+OVERRIDE ANALYSIS:
+--------------------------------------------------------------------------------
+Total predictions: 6684
+Times DeepFace & FER agreed (and differed from Custom): 647
+  - Overrides that helped (Custom wrong -> Override right): 250
+  - Overrides that hurt (Custom right -> Override wrong): 233
+  - Both were wrong: 164
+  - Both were right: 0
+Net gain from overrides: +17 correct predictions
+
+AGREEMENT PATTERNS:
+--------------------------------------------------------------------------------
+All 3 Agree                   :  3080 ( 46.1%)
+Custom + DeepFace             :   706 ( 10.6%)
+Custom + FER                  :  1473 ( 22.0%)
+DeepFace + FER (Override)     :   647 (  9.7%)
+All Disagree                  :   778 ( 11.6%)
+
+PERFORMANCE ON DIFFICULT CASES (ALL MODELS DISAGREE):
+--------------------------------------------------------------------------------
+Total disagreement cases: 778 (11.6% of all predictions)
+None of the models were correct: 141
+
+Individual model performance on disagreement cases:
+  Custom-ResNet18: 306/778 correct (39.3%)
+  DeepFace:        128/778 correct (16.5%)
+  FER:             203/778 correct (26.1%)
+
+Accuracy drop on difficult cases compared to overall:
+  Custom-ResNet18: 67.6% -> 39.3% (-28.3%)
+  DeepFace:        53.1% -> 16.5% (-36.7%)
+  FER:             63.3% -> 26.1% (-37.2%)
+
+================================================================================

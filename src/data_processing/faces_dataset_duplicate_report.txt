@@ -1,0 +1,201 @@
+================================================================================
+FACES_DATASET_BACKUP - DUPLICATE DETECTION REPORT
+================================================================================
+
+DATASET STATISTICS:
+--------------------------------------------------------------------------------
+Train set:
+  Total images: 20749
+  Unique images: 20084
+  Read errors: 0
+
+Test set:
+  Total images: 7178
+  Unique images: 7092
+  Read errors: 0
+
+TRAIN SET DUPLICATES:
+--------------------------------------------------------------------------------
+Found 573 duplicate groups in train set:
+
+  Duplicate Group 1: 2 copies
+    [angry] im1025.png
+    [angry] im1456.png
+
+  Duplicate Group 2: 2 copies
+    [angry] im1082.png
+    [angry] im2564.png
+
+  Duplicate Group 3: 2 copies
+    [angry] im1127.png
+    [angry] im2576.png
+
+  Duplicate Group 4: 2 copies
+    [angry] im121.png
+    [angry] im2913.png
+
+  Duplicate Group 5: 2 copies
+    [angry] im1210.png
+    [angry] im2686.png
+
+  Duplicate Group 6: 2 copies
+    [angry] im1214.png
+    [angry] im3939.png
+
+  Duplicate Group 7: 2 copies
+    [angry] im1220.png
+    [angry] im2304.png
+
+  Duplicate Group 8: 3 copies
+    [angry] im125.png
+    [angry] im3096.png
+    [angry] im3550.png
+
+  Duplicate Group 9: 2 copies
+    [angry] im126.png
+    [angry] im3921.png
+
+  Duplicate Group 10: 2 copies
+    [angry] im1282.png
+    [angry] im2476.png
+
+  ... and 563 more duplicate groups
+
+  Total duplicate files (excluding first copy): 665
+
+TEST SET DUPLICATES:
+--------------------------------------------------------------------------------
+Found 81 duplicate groups in test set:
+
+  Duplicate Group 1: 3 copies
+    [angry] im101.png
+    [angry] im152.png
+    [angry] im904.png
+
+  Duplicate Group 2: 2 copies
+    [angry] im138.png
+    [angry] im201.png
+
+  Duplicate Group 3: 2 copies
+    [angry] im149.png
+    [angry] im772.png
+
+  Duplicate Group 4: 2 copies
+    [angry] im218.png
+    [fearful] im11.png
+
+  Duplicate Group 5: 2 copies
+    [angry] im23.png
+    [angry] im782.png
+
+  Duplicate Group 6: 2 copies
+    [angry] im244.png
+    [angry] im615.png
+
+  Duplicate Group 7: 2 copies
+    [angry] im327.png
+    [angry] im351.png
+
+  Duplicate Group 8: 2 copies
+    [angry] im416.png
+    [angry] im527.png
+
+  Duplicate Group 9: 2 copies
+    [angry] im513.png
+    [angry] im894.png
+
+  Duplicate Group 10: 3 copies
+    [angry] im544.png
+    [angry] im812.png
+    [angry] im822.png
+
+  ... and 71 more duplicate groups
+
+  Total duplicate files (excluding first copy): 86
+
+TRAIN-TEST LEAKAGE:
+--------------------------------------------------------------------------------
+[WARNING] Found 407 images appearing in BOTH train and test sets!
+
+This is DATA LEAKAGE and will inflate test accuracy metrics.
+
+  Leakage Case 1:
+    Train files (1):
+      [surprised] im784.png
+    Test files (1):
+      [surprised] im22.png
+
+  Leakage Case 2:
+    Train files (1):
+      [surprised] im200.png
+    Test files (1):
+      [surprised] im435.png
+
+  Leakage Case 3:
+    Train files (1):
+      [surprised] im2275.png
+    Test files (2):
+      [surprised] im289.png
+      [surprised] im752.png
+
+  Leakage Case 4:
+    Train files (1):
+      [sad] im1474.png
+    Test files (1):
+      [sad] im383.png
+
+  Leakage Case 5:
+    Train files (1):
+      [happy] im3266.png
+    Test files (1):
+      [happy] im1598.png
+
+  Leakage Case 6:
+    Train files (1):
+      [surprised] im25.png
+    Test files (1):
+      [surprised] im659.png
+
+  Leakage Case 7:
+    Train files (1):
+      [surprised] im1494.png
+    Test files (1):
+      [surprised] im296.png
+
+  Leakage Case 8:
+    Train files (1):
+      [happy] im3537.png
+    Test files (1):
+      [happy] im22.png
+
+  Leakage Case 9:
+    Train files (1):
+      [fearful] im1865.png
+    Test files (1):
+      [fearful] im217.png
+
+  Leakage Case 10:
+    Train files (1):
+      [sad] im190.png
+    Test files (1):
+      [sad] im269.png
+
+  ... and 397 more leakage cases
+
+  Leakage by emotion:
+         angry: 140 leaked images
+     disgusted:  64 leaked images
+       fearful: 147 leaked images
+         happy:  94 leaked images
+       neutral:  66 leaked images
+           sad:  70 leaked images
+     surprised: 372 leaked images
+
+SUMMARY:
+--------------------------------------------------------------------------------
+[WARNING] Issues found:
+  - Train set: 573 duplicate groups (665 extra files)
+  - Test set: 81 duplicate groups (86 extra files)
+  - Train-Test Leakage: 407 images in both sets [CRITICAL]
+
+================================================================================
