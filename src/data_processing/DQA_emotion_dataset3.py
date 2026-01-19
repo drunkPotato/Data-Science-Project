@@ -30,12 +30,12 @@ class EmotionDataset3DQA:
 
         # Emotion label mapping (1-indexed)
         self.label_to_emotion = {
-            1: 'angry',
-            2: 'disgusted',
-            3: 'fearful',
+            1: 'surprised',
+            2: 'fearful',
+            3: 'disgusted',
             4: 'happy',
             5: 'sad',
-            6: 'surprised',
+            6: 'angry',
             7: 'neutral'
         }
 
